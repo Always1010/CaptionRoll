@@ -21,7 +21,7 @@ const popup = readFileSync(join(__dirname, "..", "popup.html"), "utf8");
 const content = readFileSync(join(__dirname, "..", "content.js"), "utf8");
 assert.equal(manifest.action.default_popup, "popup.html");
 assert.match(popup, /captionRollInteractionMode|name="interaction"/);
-assert.match(popup, /captionRollFontScale/);
+assert.doesNotMatch(popup, /captionRollFontScale/);
 assert.match(popup, /captionRollVideoCaptions/);
 assert.match(popup, /captionRollCaptionPosition/);
 assert.doesNotMatch(content, /data-mode="raw"/);

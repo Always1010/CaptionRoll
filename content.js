@@ -79,10 +79,16 @@
       .favorites-toggle { width:auto; padding:0 10px; gap:5px; white-space:nowrap; font-size:12px; }
       .favorites-toggle.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .toolbar { display:flex; align-items:center; gap:8px; padding: 9px 12px; border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
+      .interaction { border:0; border-radius:8px; padding:7px 10px; color:var(--yt-spec-text-secondary, #606060);
+        background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); cursor:pointer; font-size:12px; white-space:nowrap; }
+      .interaction.select { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .spacer { flex:1; }
       .follow { display:flex; align-items:center; gap:5px; border:0; border-radius:8px; padding:7px 10px;
         color:var(--yt-spec-text-secondary, #606060); background:transparent; cursor:pointer; font-size:12px; }
       .follow.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
+      .font-controls { display:flex; }
+      .font-controls button { width:30px; height:30px; border:0; color:inherit; background:transparent; border-radius:7px; cursor:pointer; }
+      .font-controls button:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
       .list-wrap { position:relative; min-height:0; }
       .list { height:100%; overflow:auto; scroll-behavior:smooth; padding: 12px 8px 120px; scrollbar-gutter:stable; }
       .empty { display:grid; place-items:center; min-height:240px; padding:32px; text-align:center; color:var(--yt-spec-text-secondary, #606060); font-size:14px; line-height:1.6; }
@@ -146,8 +152,13 @@
         <button class="icon-button collapse" type="button" title="收起文字稿" aria-label="收起文字稿">⌃</button>
       </header>
       <div class="toolbar">
+        <button type="button" class="interaction" title="切换为可选择文字">跳转模式</button>
         <div class="spacer"></div>
         <button type="button" class="follow active" title="自动跟随播放">● 跟随</button>
+        <div class="font-controls" aria-label="文字稿字号">
+          <button type="button" data-font="down" title="减小文字稿字号">A−</button>
+          <button type="button" data-font="up" title="增大文字稿字号">A+</button>
+        </div>
       </div>
       <div class="list-wrap">
         <div class="list" tabindex="0"><div class="empty">正在读取播放器的英文字幕…</div></div>
@@ -256,8 +267,13 @@
     favoriteCountElement = shadow.querySelector(".favorite-count");
     selectAllElement = shadow.querySelector(".select-all");
     exportStatusElement = shadow.querySelector(".export-status");
+    const interactionButton = shadow.querySelector(".interaction");
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
     shadow.querySelector(".favorites-toggle").addEventListener("click", toggleFavoritesView);
+    interactionButton.addEventListener("click", toggleInteractionMode);
+    shadow.querySelectorAll("[data-font]").forEach((button) => {
+      button.addEventListener("click", () => changeFont(button.dataset.font === "up" ? 0.1 : -0.1));
+    });
     selectAllElement.addEventListener("change", () => {
       state.selectedFavoriteIds = selectAllElement.checked
         ? new Set(state.favorites.map((favorite) => favorite.id))
@@ -352,6 +368,11 @@
     followButton?.setAttribute("aria-pressed", String(state.follow));
     if (resumeButton) resumeButton.hidden = state.follow;
     const selecting = state.interactionMode === "select";
+    const interactionButton = shadow.querySelector(".interaction");
+    interactionButton.textContent = selecting ? "选字模式" : "跳转模式";
+    interactionButton.title = selecting ? "切换为点击字幕跳转" : "切换为可选择文字";
+    interactionButton.classList.toggle("select", selecting);
+    interactionButton.setAttribute("aria-pressed", String(selecting));
     listElement?.classList.toggle("select-mode", selecting);
     listElement?.querySelectorAll(".cue").forEach((row) => {
       row.title = selecting ? "拖动选择文字" : "点击跳转到此处";
@@ -411,6 +432,18 @@
     applyPreferences();
     if (state.view === "favorites") renderFavorites();
     else scrollToActive();
+  }
+
+  function toggleInteractionMode() {
+    state.interactionMode = state.interactionMode === "seek" ? "select" : "seek";
+    applyPreferences();
+    savePreferences();
+  }
+
+  function changeFont(delta) {
+    state.fontScale = Math.min(1.4, Math.max(0.8, Math.round((state.fontScale + delta) * 10) / 10));
+    applyPreferences();
+    savePreferences();
   }
 
   function currentVideoTitle() {
