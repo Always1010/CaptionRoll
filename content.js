@@ -192,29 +192,35 @@
       button, input { font:inherit; }
       .caption-shell {
         position:absolute; left:5%; right:5%; bottom:var(--cr-caption-position, 12%);
-        display:flex; justify-content:center; align-items:flex-end; gap:8px;
+        display:flex; justify-content:center; pointer-events:none;
       }
       .caption-shell[hidden] { display:none; }
+      .caption-cluster { max-width:100%; display:flex; align-items:flex-start; gap:0; pointer-events:none; }
       .caption {
-        display:flex; justify-content:center; text-align:center;
+        max-width:calc(100% - 38px); display:flex; justify-content:center; text-align:center;
         font-family:Roboto, Arial, sans-serif; font-size:var(--cr-caption-font-size, 28px);
         font-weight:600; line-height:1.35; color:#fff;
         text-shadow:0 1px 2px rgba(0,0,0,.95), 0 0 4px rgba(0,0,0,.75);
+        pointer-events:auto; cursor:text; user-select:text; -webkit-user-select:text;
       }
       .caption span {
-        max-width:92%; padding:.16em .38em .2em; border-radius:.22em;
+        max-width:100%; padding:.16em .38em .2em; border-radius:.22em;
         background:rgba(0,0,0,var(--cr-caption-background, .7));
         box-decoration-break:clone; -webkit-box-decoration-break:clone;
+        user-select:text; -webkit-user-select:text;
       }
-      .caption-settings { position:relative; flex:0 0 auto; pointer-events:auto; }
+      .caption-settings { position:relative; flex:0 0 auto; pointer-events:none; }
       .caption-settings-trigger {
         width:34px; height:30px; border:1px solid rgba(255,255,255,.35); border-radius:8px;
         color:#fff; background:rgba(0,0,0,.58); cursor:pointer; font-size:12px; font-weight:700;
-        opacity:.35; transition:opacity .15s ease, background .15s ease;
+        opacity:0; visibility:hidden; pointer-events:none;
+        transition:opacity .15s ease, visibility .15s ease, background .15s ease;
       }
-      :host-context(#movie_player:hover) .caption-settings-trigger,
-      .caption-settings-trigger:hover,
-      .caption-settings-trigger[aria-expanded="true"] { opacity:1; background:rgba(0,0,0,.78); }
+      .caption:hover + .caption-settings .caption-settings-trigger,
+      .caption-settings:hover .caption-settings-trigger,
+      .caption-settings-trigger[aria-expanded="true"] {
+        opacity:1; visibility:visible; pointer-events:auto; background:rgba(0,0,0,.78);
+      }
       .caption-settings-popover {
         position:absolute; right:0; bottom:calc(100% + 8px); width:224px; padding:12px;
         border:1px solid rgba(255,255,255,.22); border-radius:12px;
@@ -222,6 +228,7 @@
         font:12px/1.35 Roboto, Arial, sans-serif; text-shadow:none;
       }
       .caption-settings-popover[hidden] { display:none; }
+      .caption-settings-popover:not([hidden]) { pointer-events:auto; }
       .caption-setting-row { display:grid; grid-template-columns:62px minmax(0,1fr); align-items:center; gap:10px; margin-bottom:11px; }
       .caption-setting-row:last-of-type { margin-bottom:10px; }
       .caption-font-buttons { display:flex; gap:6px; }
@@ -235,26 +242,28 @@
       .caption-reset { width:100%; padding:7px 10px; }
     </style>
     <div class="caption-shell" hidden>
-      <div class="caption" aria-live="off"><span></span></div>
-      <div class="caption-settings">
-        <button class="caption-settings-trigger" type="button" title="调整整句字幕" aria-label="调整整句字幕" aria-expanded="false">Aa</button>
-        <div class="caption-settings-popover" hidden>
-          <div class="caption-setting-row">
-            <span class="caption-setting-label">字号</span>
-            <div class="caption-font-buttons">
-              <button type="button" data-caption-font="down" title="减小字幕字号">A−</button>
-              <button type="button" data-caption-font="up" title="增大字幕字号">A+</button>
+      <div class="caption-cluster">
+        <div class="caption" aria-live="off"><span></span></div>
+        <div class="caption-settings">
+          <button class="caption-settings-trigger" type="button" title="调整整句字幕" aria-label="调整整句字幕" aria-expanded="false">Aa</button>
+          <div class="caption-settings-popover" hidden>
+            <div class="caption-setting-row">
+              <span class="caption-setting-label">字号</span>
+              <div class="caption-font-buttons">
+                <button type="button" data-caption-font="down" title="减小字幕字号">A−</button>
+                <button type="button" data-caption-font="up" title="增大字幕字号">A+</button>
+              </div>
             </div>
+            <label class="caption-setting-row">
+              <span class="caption-setting-label">位置</span>
+              <input type="range" min="4" max="24" step="1" data-caption-position>
+            </label>
+            <label class="caption-setting-row">
+              <span class="caption-setting-label">背景</span>
+              <input type="range" min="0" max="0.9" step="0.1" data-caption-background>
+            </label>
+            <button class="caption-reset" type="button">恢复默认样式</button>
           </div>
-          <label class="caption-setting-row">
-            <span class="caption-setting-label">位置</span>
-            <input type="range" min="4" max="24" step="1" data-caption-position>
-          </label>
-          <label class="caption-setting-row">
-            <span class="caption-setting-label">背景</span>
-            <input type="range" min="0" max="0.9" step="0.1" data-caption-background>
-          </label>
-          <button class="caption-reset" type="button">恢复默认样式</button>
         </div>
       </div>
     </div>
@@ -314,11 +323,15 @@
   }
 
   function bindVideoCaptionUi() {
+    const caption = videoCaptionShadow.querySelector(".caption");
     const trigger = videoCaptionShadow.querySelector(".caption-settings-trigger");
     const popover = videoCaptionShadow.querySelector(".caption-settings-popover");
     trigger.addEventListener("click", () => {
       popover.hidden = !popover.hidden;
       trigger.setAttribute("aria-expanded", String(!popover.hidden));
+    });
+    ["pointerdown", "mousedown", "click", "dblclick"].forEach((eventName) => {
+      caption.addEventListener(eventName, (event) => event.stopPropagation());
     });
     videoCaptionShadow.querySelectorAll("[data-caption-font]").forEach((button) => {
       button.addEventListener("click", () => {

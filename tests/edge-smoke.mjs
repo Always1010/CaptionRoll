@@ -42,6 +42,38 @@ function evaluate(target, expression) {
   });
 }
 
+function moveMouse(target, x, y) {
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(target.webSocketDebuggerUrl);
+    const id = 3;
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error("Mouse movement timed out"));
+    }, 15000);
+
+    socket.addEventListener("open", () => {
+      socket.send(
+        JSON.stringify({
+          id,
+          method: "Input.dispatchMouseEvent",
+          params: { type: "mouseMoved", x, y }
+        })
+      );
+    });
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(String(event.data));
+      if (message.id !== id) return;
+      clearTimeout(timeout);
+      socket.close();
+      resolve();
+    });
+    socket.addEventListener("error", () => {
+      clearTimeout(timeout);
+      reject(new Error("DevTools mouse movement failed"));
+    });
+  });
+}
+
 function captureScreenshot(target) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -169,6 +201,83 @@ if (result?.cueCount > 0) {
   );
   console.log(JSON.stringify({ videoCaption }, null, 2));
   if (!videoCaption.visible || !videoCaption.text || !videoCaption.nativeCaptionsHidden) {
+    process.exitCode = 1;
+  }
+
+  await moveMouse(target, 1, 1);
+  const captionInteractionBefore = await evaluate(
+    target,
+    `(() => {
+      const root = document.getElementById('captionroll-video-caption-host')?.shadowRoot;
+      const caption = root?.querySelector('.caption');
+      const captionText = caption?.querySelector('span');
+      const trigger = root?.querySelector('.caption-settings-trigger');
+      if (!caption || !captionText || !trigger) return { found: false };
+      const captionStyle = getComputedStyle(caption);
+      const triggerStyle = getComputedStyle(trigger);
+      const captionRect = caption.getBoundingClientRect();
+      const triggerRect = trigger.getBoundingClientRect();
+      const selection = getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(captionText);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+      const selectedText = selection?.toString().trim() ?? '';
+      selection?.removeAllRanges();
+      return {
+        found: true,
+        userSelect: captionStyle.userSelect,
+        pointerEvents: captionStyle.pointerEvents,
+        selectedText,
+        triggerOpacity: triggerStyle.opacity,
+        triggerVisibility: triggerStyle.visibility,
+        triggerPointerEvents: triggerStyle.pointerEvents,
+        captionCenter: {
+          x: captionRect.left + captionRect.width / 2,
+          y: captionRect.top + captionRect.height / 2
+        },
+        controlGap: triggerRect.left - captionRect.right
+      };
+    })()`
+  );
+  if (captionInteractionBefore?.captionCenter) {
+    await moveMouse(
+      target,
+      captionInteractionBefore.captionCenter.x,
+      captionInteractionBefore.captionCenter.y
+    );
+  }
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const captionInteractionAfter = await evaluate(
+    target,
+    `(() => {
+      const trigger = document.getElementById('captionroll-video-caption-host')?.shadowRoot?.querySelector('.caption-settings-trigger');
+      if (!trigger) return { found: false };
+      const style = getComputedStyle(trigger);
+      return {
+        found: true,
+        triggerOpacity: style.opacity,
+        triggerVisibility: style.visibility,
+        triggerPointerEvents: style.pointerEvents
+      };
+    })()`
+  );
+  console.log(JSON.stringify({ captionInteractionBefore, captionInteractionAfter }, null, 2));
+  if (
+    !captionInteractionBefore.found ||
+    captionInteractionBefore.userSelect !== 'text' ||
+    captionInteractionBefore.pointerEvents !== 'auto' ||
+    !captionInteractionBefore.selectedText ||
+    Number(captionInteractionBefore.triggerOpacity) !== 0 ||
+    captionInteractionBefore.triggerVisibility !== 'hidden' ||
+    captionInteractionBefore.triggerPointerEvents !== 'none' ||
+    captionInteractionBefore.controlGap < 0 ||
+    captionInteractionBefore.controlGap > 1 ||
+    !captionInteractionAfter.found ||
+    Number(captionInteractionAfter.triggerOpacity) < 0.9 ||
+    captionInteractionAfter.triggerVisibility !== 'visible' ||
+    captionInteractionAfter.triggerPointerEvents !== 'auto'
+  ) {
     process.exitCode = 1;
   }
 
