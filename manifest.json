@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "CaptionRoll",
+  "version": "0.1.0",
+  "description": "A larger, sentence-aware English transcript for YouTube.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*"],
+  "action": {
+    "default_title": "显示或收起 CaptionRoll"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.youtube.com/*"],
+      "css": ["content.css"],
+      "js": ["sentence-engine.js", "content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

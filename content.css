@@ -1,0 +1,27 @@
+#captionroll-host {
+  display: block !important;
+  position: sticky;
+  top: 68px;
+  width: 100%;
+  margin: 0 0 16px;
+  z-index: 2100;
+  box-sizing: border-box;
+}
+
+#secondary.captionroll-secondary {
+  box-sizing: border-box;
+}
+
+@media (min-width: 1220px) {
+  ytd-watch-flexy:not([theater]) #secondary.captionroll-secondary {
+    width: clamp(430px, 31vw, 520px) !important;
+    min-width: 430px !important;
+    max-width: 520px !important;
+  }
+}
+
+#below > #captionroll-host {
+  position: relative;
+  top: auto;
+  margin: 16px 0;
+}
