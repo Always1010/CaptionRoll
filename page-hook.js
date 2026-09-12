@@ -198,7 +198,7 @@
 
       const response = await originalFetch.call(window, url.href, { credentials: "same-origin" });
       const body = await response.text();
-      if (!deliverCues(parseTimedText(body), "timed-text")) {
+      if (!deliverCues(parseTimedText(body), "timed-text") && !deliveredSignature) {
         postStatus("waiting", "字幕请求已发现，正在等待有效英文轨道…");
       }
     } catch (_) {
