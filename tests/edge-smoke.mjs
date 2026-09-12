@@ -69,6 +69,25 @@ function captureScreenshot(target) {
   });
 }
 
+function relativeLuminance(cssColor) {
+  const values = String(cssColor).match(/[\d.]+/g)?.slice(0, 3).map(Number);
+  if (!values || values.length !== 3) return null;
+  const channels = values.map((value) => {
+    const normalized = value / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+function contrastRatio(foreground, background) {
+  const foregroundLuminance = relativeLuminance(foreground);
+  const backgroundLuminance = relativeLuminance(background);
+  if (foregroundLuminance === null || backgroundLuminance === null) return 0;
+  const lighter = Math.max(foregroundLuminance, backgroundLuminance);
+  const darker = Math.min(foregroundLuminance, backgroundLuminance);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 const target = await findYouTubeTarget();
 await new Promise((resolve) => setTimeout(resolve, 10000));
 const result = await evaluate(
@@ -89,6 +108,31 @@ const result = await evaluate(
 console.log(JSON.stringify(result, null, 2));
 if (!result?.hasPanel) process.exitCode = 1;
 if (!result?.hasInteractionMode || !result?.hasFavorites || !result?.hasQuizletExport) process.exitCode = 1;
+if (result?.cueCount > 0) {
+  const favoriteAppearance = await evaluate(
+    target,
+    `(() => {
+      const root = document.getElementById('captionroll-host')?.shadowRoot;
+      root?.querySelector('.favorite-action')?.click();
+      root?.querySelector('.favorites-toggle')?.click();
+      const input = root?.querySelector('.favorite-chinese');
+      if (!input) return { inputFound: false };
+      input.value = '中文测试';
+      const style = getComputedStyle(input);
+      return {
+        inputFound: true,
+        color: style.color,
+        backgroundColor: style.backgroundColor
+      };
+    })()`
+  );
+  favoriteAppearance.contrastRatio = contrastRatio(
+    favoriteAppearance.color,
+    favoriteAppearance.backgroundColor
+  );
+  console.log(JSON.stringify({ favoriteAppearance }, null, 2));
+  if (!favoriteAppearance.inputFound || favoriteAppearance.contrastRatio < 4.5) process.exitCode = 1;
+}
 if (screenshotPath) {
   const base64 = await captureScreenshot(target);
   await writeFile(screenshotPath, Buffer.from(base64, "base64"));

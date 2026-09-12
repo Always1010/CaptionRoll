@@ -117,7 +117,7 @@
       .favorite-card input { margin-top:4px; }
       .favorite-english { font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
       .favorite-chinese { width:100%; min-height:54px; margin-top:8px; resize:vertical; border:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.14));
-        border-radius:8px; padding:8px 9px; color:inherit; background:var(--yt-spec-base-background, #fff); font:inherit; font-size:13px; line-height:1.45; }
+        border-radius:8px; padding:8px 9px; color:#0f0f0f; background:#fff; font:inherit; font-size:13px; line-height:1.45; }
       .favorite-chinese:focus { outline:2px solid var(--cr-accent-soft); border-color:var(--cr-accent); }
       .favorite-source { margin-top:5px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
       .favorite-remove { width:30px; height:30px; border:0; border-radius:50%; color:var(--yt-spec-text-secondary, #606060);
@@ -133,7 +133,9 @@
       .primary-button:disabled, .secondary-button:disabled { opacity:.55; cursor:default; }
       @media (prefers-color-scheme: dark) {
         .panel { background: var(--yt-spec-base-background, #0f0f0f); color:var(--yt-spec-text-primary, #f1f1f1); }
+        .favorite-chinese { color:#f1f1f1; background:#212121; border-color:rgba(255,255,255,.2); }
       }
+      :host-context(html[dark]) .favorite-chinese { color:#f1f1f1; background:#212121; border-color:rgba(255,255,255,.2); }
     </style>
     <section class="panel" aria-label="CaptionRoll 英文文字稿">
       <header class="header">
