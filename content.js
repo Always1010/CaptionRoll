@@ -3,6 +3,7 @@
 
   const MESSAGE_PREFIX = "CAPTIONROLL/";
   const engine = globalThis.CaptionRollEngine;
+  const cardEngine = globalThis.CaptionRollCards;
   const initialVideoId =
     location.pathname === "/watch" ? new URLSearchParams(location.search).get("v") : null;
   const state = {
@@ -11,6 +12,9 @@
     sentences: [],
     mode: "sentences",
     interactionMode: "seek",
+    view: "transcript",
+    favorites: [],
+    selectedFavoriteIds: new Set(),
     follow: true,
     collapsed: false,
     fontScale: 1,
@@ -27,6 +31,9 @@
   let metaElement = null;
   let resumeButton = null;
   let followButton = null;
+  let favoritesElement = null;
+  let favoriteCountElement = null;
+  let selectAllElement = null;
   let videoElement = null;
   let observer = null;
 
@@ -45,7 +52,8 @@
         font-family: Roboto, Arial, sans-serif;
       }
       .panel.collapsed { height: 58px; min-height: 58px; grid-template-rows: 58px; }
-      .panel.collapsed .toolbar, .panel.collapsed .list-wrap, .panel.collapsed .footer { display: none; }
+      .panel.collapsed .toolbar, .panel.collapsed .list-wrap, .panel.collapsed .footer, .panel.collapsed .favorites-view { display: none; }
+      .panel.favorites-open .toolbar, .panel.favorites-open > .list-wrap, .panel.favorites-open > .footer { display:none; }
       .header { min-height: 58px; display: flex; align-items: center; gap: 10px; padding: 10px 12px 10px 16px;
         border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
       .brand { min-width: 0; flex: 1; }
@@ -57,6 +65,8 @@
       .icon-button { width: 34px; height: 34px; display:grid; place-items:center; padding:0; border:0; border-radius: 50%;
         color: inherit; background: transparent; cursor:pointer; }
       .icon-button:hover { background: var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
+      .favorites-toggle { width:auto; padding:0 10px; gap:5px; white-space:nowrap; font-size:12px; }
+      .favorites-toggle.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .toolbar { display:flex; align-items:center; gap:8px; padding: 9px 12px; border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
       .segments { display:flex; gap:2px; padding:3px; border-radius:10px; background: var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); }
       .segments button, .follow { border:0; border-radius:8px; padding:7px 10px; color:inherit; background:transparent; cursor:pointer; font-size:12px; }
@@ -73,19 +83,42 @@
       .list-wrap { position:relative; min-height:0; }
       .list { height:100%; overflow:auto; scroll-behavior:smooth; padding: 12px 8px 120px; scrollbar-gutter:stable; }
       .empty { display:grid; place-items:center; min-height:240px; padding:32px; text-align:center; color:var(--yt-spec-text-secondary, #606060); font-size:14px; line-height:1.6; }
-      .cue { width:100%; display:grid; grid-template-columns: 48px minmax(0,1fr); gap:10px; padding: 10px 12px; border:0;
+      .cue { width:100%; display:grid; grid-template-columns: 48px minmax(0,1fr) 34px; gap:10px; padding: 10px 8px 10px 12px; border:0;
         border-left:3px solid transparent; border-radius:10px; color:inherit; background:transparent; text-align:left; cursor:pointer; }
       .cue:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.07)); }
       .cue.current { border-left-color:var(--cr-accent); background:var(--cr-accent-soft); }
+      .cue.no-favorite { grid-template-columns:48px minmax(0,1fr); padding-right:12px; }
       .list.select-mode .cue { cursor:text; user-select:text; }
       .time { padding-top:2px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; font-variant-numeric: tabular-nums; }
       .text { font-size: calc(16px * var(--cr-font-scale, 1)); line-height:1.55; overflow-wrap:anywhere; }
       .cue.current .text { font-weight:600; }
+      .favorite-action { width:32px; height:32px; align-self:start; border:0; border-radius:50%; color:var(--yt-spec-text-secondary, #606060);
+        background:transparent; cursor:pointer; font-size:18px; line-height:1; }
+      .favorite-action:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
+      .favorite-action.saved { color:#f2a100; }
       .resume { position:absolute; left:50%; bottom:14px; transform:translateX(-50%); border:0; border-radius:999px; padding:9px 14px;
         color:#fff; background:var(--cr-accent); box-shadow:0 5px 18px rgba(0,0,0,.25); cursor:pointer; }
       .resume[hidden] { display:none; }
       .footer { min-height:38px; display:flex; align-items:center; padding:8px 14px; border-top:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1));
         color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
+      .favorites-view { grid-row:2 / 5; min-height:0; display:grid; grid-template-rows:auto minmax(0,1fr) auto; }
+      .favorites-view[hidden] { display:none; }
+      .favorites-toolbar { display:flex; align-items:center; gap:8px; padding:10px 12px;
+        border-bottom:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
+      .check-all { display:flex; align-items:center; gap:7px; font-size:12px; cursor:pointer; }
+      .secondary-button { border:0; border-radius:8px; padding:7px 10px; color:inherit;
+        background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); cursor:pointer; font-size:12px; }
+      .favorites-list { min-height:0; overflow:auto; padding:8px; }
+      .favorite-card { display:grid; grid-template-columns:24px minmax(0,1fr) 34px; gap:8px; padding:12px 8px;
+        border-bottom:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); }
+      .favorite-card input { margin-top:4px; }
+      .favorite-english { font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+      .favorite-source { margin-top:5px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
+      .favorite-remove { width:30px; height:30px; border:0; border-radius:50%; color:var(--yt-spec-text-secondary, #606060);
+        background:transparent; cursor:pointer; }
+      .favorite-remove:hover { color:#c62828; background:rgba(198,40,40,.1); }
+      .favorites-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px;
+        border-top:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
       @media (prefers-color-scheme: dark) {
         .panel { background: var(--yt-spec-base-background, #0f0f0f); color:var(--yt-spec-text-primary, #f1f1f1); }
       }
@@ -96,6 +129,7 @@
           <div class="brand-line"><span class="logo"></span><h2>CaptionRoll</h2></div>
           <div class="status">正在查找英文字幕…</div>
         </div>
+        <button class="icon-button favorites-toggle" type="button" title="打开收藏夹" aria-label="打开收藏夹">★ <span class="favorite-count">0</span></button>
         <button class="icon-button collapse" type="button" title="收起文字稿" aria-label="收起文字稿">⌃</button>
       </header>
       <div class="toolbar">
@@ -116,6 +150,18 @@
         <button type="button" class="resume" hidden>回到当前字幕</button>
       </div>
       <footer class="footer"><span class="meta">等待字幕数据</span></footer>
+      <section class="favorites-view" aria-label="句子收藏夹" hidden>
+        <div class="favorites-toolbar">
+          <label class="check-all"><input class="select-all" type="checkbox"> 全选</label>
+          <div class="spacer"></div>
+          <button type="button" class="secondary-button remove-selected">删除所选</button>
+        </div>
+        <div class="favorites-list"><div class="empty">还没有收藏句子。</div></div>
+        <div class="favorites-footer">
+          <span class="favorites-meta">0 条收藏</span>
+          <span>仅保存在本机</span>
+        </div>
+      </section>
     </section>
   `;
 
@@ -160,9 +206,13 @@
     metaElement = shadow.querySelector(".meta");
     resumeButton = shadow.querySelector(".resume");
     followButton = shadow.querySelector(".follow");
+    favoritesElement = shadow.querySelector(".favorites-list");
+    favoriteCountElement = shadow.querySelector(".favorite-count");
+    selectAllElement = shadow.querySelector(".select-all");
     const interactionButton = shadow.querySelector(".interaction");
 
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
+    shadow.querySelector(".favorites-toggle").addEventListener("click", toggleFavoritesView);
     shadow.querySelectorAll("[data-mode]").forEach((button) => {
       button.addEventListener("click", () => setMode(button.dataset.mode));
     });
@@ -170,6 +220,25 @@
       button.addEventListener("click", () => changeFont(button.dataset.font === "up" ? 0.1 : -0.1));
     });
     interactionButton.addEventListener("click", toggleInteractionMode);
+    selectAllElement.addEventListener("change", () => {
+      state.selectedFavoriteIds = selectAllElement.checked
+        ? new Set(state.favorites.map((favorite) => favorite.id))
+        : new Set();
+      renderFavorites();
+    });
+    shadow.querySelector(".remove-selected").addEventListener("click", removeSelectedFavorites);
+    favoritesElement.addEventListener("change", (event) => {
+      const checkbox = event.target.closest("[data-select-favorite]");
+      if (!checkbox) return;
+      if (checkbox.checked) state.selectedFavoriteIds.add(checkbox.dataset.selectFavorite);
+      else state.selectedFavoriteIds.delete(checkbox.dataset.selectFavorite);
+      updateFavoriteSelectionSummary();
+    });
+    favoritesElement.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("[data-remove-favorite]");
+      if (!removeButton) return;
+      removeFavorite(removeButton.dataset.removeFavorite);
+    });
     followButton.addEventListener("click", () => setFollow(!state.follow, true));
     resumeButton.addEventListener("click", () => setFollow(true, true));
     listElement.addEventListener("wheel", () => setFollow(false), { passive: true });
@@ -179,16 +248,21 @@
     });
     listElement.addEventListener("keydown", (event) => {
       if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"].includes(event.key)) setFollow(false);
+      const row = event.target.closest(".cue");
+      if (event.key === "Enter" && row && state.interactionMode === "seek") {
+        event.preventDefault();
+        seekToItem(Number(row.dataset.index));
+      }
     });
     listElement.addEventListener("click", (event) => {
       const row = event.target.closest(".cue");
-      if (!row || state.interactionMode !== "seek") return;
-      const item = currentItems()[Number(row.dataset.index)];
-      const video = getVideo();
-      if (item && video) {
-        video.currentTime = item.startMs / 1000;
-        setFollow(true, true);
+      const favoriteButton = event.target.closest("[data-favorite-index]");
+      if (favoriteButton) {
+        toggleFavorite(Number(favoriteButton.dataset.favoriteIndex));
+        return;
       }
+      if (!row || state.interactionMode !== "seek") return;
+      seekToItem(Number(row.dataset.index));
     });
   }
 
@@ -198,14 +272,18 @@
         captionRollMode: "sentences",
         captionRollInteractionMode: "seek",
         captionRollFontScale: 1,
-        captionRollCollapsed: false
+        captionRollCollapsed: false,
+        captionRollFavorites: []
       });
       state.mode = saved.captionRollMode === "raw" ? "raw" : "sentences";
       state.interactionMode = saved.captionRollInteractionMode === "select" ? "select" : "seek";
       state.fontScale = Math.min(1.4, Math.max(0.8, Number(saved.captionRollFontScale) || 1));
       state.collapsed = Boolean(saved.captionRollCollapsed);
+      state.favorites = cardEngine.normalizeFavorites(saved.captionRollFavorites);
+      state.selectedFavoriteIds = new Set(state.favorites.map((favorite) => favorite.id));
       applyPreferences();
       renderList();
+      renderFavorites();
     } catch (_) {}
   }
 
@@ -218,6 +296,10 @@
         captionRollCollapsed: state.collapsed
       })
       .catch(() => {});
+  }
+
+  function saveFavorites() {
+    chrome.storage.local.set({ captionRollFavorites: state.favorites }).catch(() => {});
   }
 
   function applyPreferences() {
@@ -236,6 +318,14 @@
     interactionButton.classList.toggle("select", selecting);
     interactionButton.setAttribute("aria-pressed", String(selecting));
     listElement?.classList.toggle("select-mode", selecting);
+    const favoritesOpen = state.view === "favorites";
+    shadow.querySelector(".panel").classList.toggle("favorites-open", favoritesOpen);
+    const favoritesView = shadow.querySelector(".favorites-view");
+    favoritesView.hidden = !favoritesOpen;
+    const favoritesButton = shadow.querySelector(".favorites-toggle");
+    favoritesButton.classList.toggle("active", favoritesOpen);
+    favoritesButton.title = favoritesOpen ? "返回文字稿" : "打开收藏夹";
+    favoritesButton.setAttribute("aria-label", favoritesButton.title);
     shadow.host.style.setProperty("--cr-font-scale", String(state.fontScale));
   }
 
@@ -244,6 +334,13 @@
     applyPreferences();
     savePreferences();
     if (!state.collapsed) scrollToActive();
+  }
+
+  function toggleFavoritesView() {
+    state.view = state.view === "favorites" ? "transcript" : "favorites";
+    applyPreferences();
+    if (state.view === "favorites") renderFavorites();
+    else scrollToActive();
   }
 
   function setMode(mode) {
@@ -268,12 +365,129 @@
     savePreferences();
   }
 
+  function currentVideoTitle() {
+    const heading = document.querySelector("ytd-watch-metadata h1, #info-contents h1");
+    return heading?.textContent?.trim() || document.title.replace(/\s+-\s+YouTube\s*$/, "").trim();
+  }
+
+  function favoriteForItem(item) {
+    if (!item || !state.videoId) return null;
+    const id = cardEngine.createFavoriteId(state.videoId, item.startMs, item.text);
+    return state.favorites.find((favorite) => favorite.id === id) ?? null;
+  }
+
+  function toggleFavorite(index) {
+    if (state.mode !== "sentences") return;
+    const item = state.sentences[index];
+    if (!item || !state.videoId) return;
+    const existing = favoriteForItem(item);
+    if (existing) {
+      removeFavorite(existing.id);
+      return;
+    }
+    const seconds = Math.max(0, Math.floor(item.startMs / 1000));
+    const favorite = cardEngine.createFavorite({
+      english: item.text,
+      videoId: state.videoId,
+      startMs: item.startMs,
+      sourceTitle: currentVideoTitle(),
+      sourceUrl: `https://www.youtube.com/watch?v=${encodeURIComponent(state.videoId)}&t=${seconds}s`,
+      savedAt: Date.now()
+    });
+    if (!favorite) return;
+    state.favorites.unshift(favorite);
+    state.selectedFavoriteIds.add(favorite.id);
+    saveFavorites();
+    renderList();
+    renderFavorites();
+  }
+
+  function removeFavorite(id) {
+    const next = state.favorites.filter((favorite) => favorite.id !== id);
+    if (next.length === state.favorites.length) return;
+    state.favorites = next;
+    state.selectedFavoriteIds.delete(id);
+    saveFavorites();
+    renderList();
+    renderFavorites();
+  }
+
+  function removeSelectedFavorites() {
+    if (!state.selectedFavoriteIds.size) return;
+    state.favorites = state.favorites.filter((favorite) => !state.selectedFavoriteIds.has(favorite.id));
+    state.selectedFavoriteIds.clear();
+    saveFavorites();
+    renderList();
+    renderFavorites();
+  }
+
+  function updateFavoriteSelectionSummary() {
+    if (!selectAllElement) return;
+    const selectedCount = state.favorites.filter((favorite) => state.selectedFavoriteIds.has(favorite.id)).length;
+    selectAllElement.checked = Boolean(state.favorites.length) && selectedCount === state.favorites.length;
+    selectAllElement.indeterminate = selectedCount > 0 && selectedCount < state.favorites.length;
+    shadow.querySelector(".favorites-meta").textContent = `${state.favorites.length} 条收藏 · 已选 ${selectedCount} 条`;
+  }
+
+  function renderFavorites() {
+    if (!favoritesElement) return;
+    favoriteCountElement.textContent = String(state.favorites.length);
+    favoritesElement.replaceChildren();
+    if (!state.favorites.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "还没有收藏句子。\n返回文字稿，点击句子右侧的星标即可收藏。";
+      empty.style.whiteSpace = "pre-line";
+      favoritesElement.append(empty);
+      updateFavoriteSelectionSummary();
+      return;
+    }
+
+    const fragment = document.createDocumentFragment();
+    for (const favorite of state.favorites) {
+      const card = document.createElement("article");
+      card.className = "favorite-card";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = state.selectedFavoriteIds.has(favorite.id);
+      checkbox.dataset.selectFavorite = favorite.id;
+      checkbox.setAttribute("aria-label", `选择：${favorite.english}`);
+      const body = document.createElement("div");
+      const english = document.createElement("div");
+      english.className = "favorite-english";
+      english.textContent = favorite.english;
+      const source = document.createElement("div");
+      source.className = "favorite-source";
+      source.textContent = `${formatTime(favorite.startMs)}${favorite.sourceTitle ? ` · ${favorite.sourceTitle}` : ""}`;
+      body.append(english, source);
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "favorite-remove";
+      remove.dataset.removeFavorite = favorite.id;
+      remove.title = "删除收藏";
+      remove.setAttribute("aria-label", "删除收藏");
+      remove.textContent = "×";
+      card.append(checkbox, body, remove);
+      fragment.append(card);
+    }
+    favoritesElement.append(fragment);
+    updateFavoriteSelectionSummary();
+  }
+
   function setFollow(value, scrollNow = false) {
     state.follow = Boolean(value);
     followButton?.classList.toggle("active", state.follow);
     followButton?.setAttribute("aria-pressed", String(state.follow));
     if (resumeButton) resumeButton.hidden = state.follow;
     if (state.follow && scrollNow) scrollToActive();
+  }
+
+  function seekToItem(index) {
+    const item = currentItems()[index];
+    const video = getVideo();
+    if (!item || !video) return;
+    video.currentTime = item.startMs / 1000;
+    setFollow(true, true);
   }
 
   function updateStatus() {
@@ -308,10 +522,11 @@
 
     const fragment = document.createDocumentFragment();
     items.forEach((item, index) => {
-      const row = document.createElement("button");
-      row.type = "button";
+      const row = document.createElement("div");
       row.className = "cue";
       row.dataset.index = String(index);
+      row.tabIndex = 0;
+      row.setAttribute("role", state.interactionMode === "seek" ? "button" : "group");
       row.title = state.interactionMode === "seek" ? "点击跳转到此处" : "拖动选择文字";
       const time = document.createElement("span");
       time.className = "time";
@@ -320,6 +535,19 @@
       text.className = "text";
       text.textContent = item.text;
       row.append(time, text);
+      if (state.mode === "sentences") {
+        const saved = Boolean(favoriteForItem(item));
+        const favoriteButton = document.createElement("button");
+        favoriteButton.type = "button";
+        favoriteButton.className = `favorite-action${saved ? " saved" : ""}`;
+        favoriteButton.dataset.favoriteIndex = String(index);
+        favoriteButton.title = saved ? "取消收藏" : "收藏句子";
+        favoriteButton.setAttribute("aria-label", favoriteButton.title);
+        favoriteButton.textContent = saved ? "★" : "☆";
+        row.append(favoriteButton);
+      } else {
+        row.classList.add("no-favorite");
+      }
       fragment.append(row);
     });
     listElement.append(fragment);

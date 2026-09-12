@@ -22,7 +22,7 @@
     {
       "matches": ["https://www.youtube.com/*"],
       "css": ["content.css"],
-      "js": ["sentence-engine.js", "content.js"],
+      "js": ["sentence-engine.js", "card-engine.js", "content.js"],
       "run_at": "document_start"
     }
   ]
