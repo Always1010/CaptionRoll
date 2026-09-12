@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CaptionRoll 设置</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header class="hero">
+        <span class="logo" aria-hidden="true"></span>
+        <div>
+          <h1>CaptionRoll</h1>
+          <p>让英文字幕更完整、更容易阅读</p>
+        </div>
+      </header>
+
+      <section aria-labelledby="transcript-heading">
+        <h2 id="transcript-heading">文字稿面板</h2>
+
+        <label class="setting toggle-row">
+          <span>
+            <strong>显示文字稿</strong>
+            <small>在 YouTube 视频旁显示完整句子</small>
+          </span>
+          <input type="checkbox" data-setting="captionRollPanelVisible">
+        </label>
+
+        <div class="setting stacked">
+          <span>
+            <strong>点击字幕时</strong>
+            <small>选择跳转视频，或者拖动选择文字</small>
+          </span>
+          <div class="segmented" role="radiogroup" aria-label="字幕交互方式">
+            <label><input type="radio" name="interaction" value="seek"><span>跳转模式</span></label>
+            <label><input type="radio" name="interaction" value="select"><span>选字模式</span></label>
+          </div>
+        </div>
+
+        <label class="setting stacked">
+          <span class="range-heading">
+            <span>
+              <strong>文字稿字号</strong>
+              <small>调整旁边文字稿的大小</small>
+            </span>
+            <output data-output="captionRollFontScale">100%</output>
+          </span>
+          <input type="range" min="0.8" max="1.4" step="0.1" data-setting="captionRollFontScale">
+        </label>
+
+        <label class="setting toggle-row">
+          <span>
+            <strong>自动跟随播放</strong>
+            <small>自动把当前句子滚动到面板中间</small>
+          </span>
+          <input type="checkbox" data-setting="captionRollFollow">
+        </label>
+
+        <label class="setting toggle-row">
+          <span>
+            <strong>默认展开面板</strong>
+            <small>关闭后，新打开的视频默认保持收起</small>
+          </span>
+          <input type="checkbox" data-setting="captionRollExpanded">
+        </label>
+      </section>
+
+      <p class="saved" role="status" aria-live="polite">设置会自动保存在本机</p>
+    </main>
+    <script src="settings.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

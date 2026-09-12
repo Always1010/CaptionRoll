@@ -4,14 +4,15 @@
   const MESSAGE_PREFIX = "CAPTIONROLL/";
   const engine = globalThis.CaptionRollEngine;
   const cardEngine = globalThis.CaptionRollCards;
+  const settingsEngine = globalThis.CaptionRollSettings;
   const initialVideoId =
     location.pathname === "/watch" ? new URLSearchParams(location.search).get("v") : null;
   const state = {
     videoId: initialVideoId,
     rawCues: [],
     sentences: [],
-    mode: "sentences",
     interactionMode: "seek",
+    panelVisible: true,
     view: "transcript",
     favorites: [],
     selectedFavoriteIds: new Set(),
@@ -71,18 +72,10 @@
       .favorites-toggle { width:auto; padding:0 10px; gap:5px; white-space:nowrap; font-size:12px; }
       .favorites-toggle.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .toolbar { display:flex; align-items:center; gap:8px; padding: 9px 12px; border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
-      .segments { display:flex; gap:2px; padding:3px; border-radius:10px; background: var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); }
-      .segments button, .follow { border:0; border-radius:8px; padding:7px 10px; color:inherit; background:transparent; cursor:pointer; font-size:12px; }
-      .segments button.active { color:#fff; background:var(--cr-accent); }
-      .interaction { border:0; border-radius:8px; padding:7px 10px; color:var(--yt-spec-text-secondary, #606060);
-        background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); cursor:pointer; font-size:12px; white-space:nowrap; }
-      .interaction.select { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .spacer { flex:1; }
-      .follow { display:flex; align-items:center; gap:5px; color:var(--yt-spec-text-secondary, #606060); }
+      .follow { display:flex; align-items:center; gap:5px; border:0; border-radius:8px; padding:7px 10px;
+        color:var(--yt-spec-text-secondary, #606060); background:transparent; cursor:pointer; font-size:12px; }
       .follow.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
-      .font-controls { display:flex; }
-      .font-controls button { width:30px; height:30px; border:0; color:inherit; background:transparent; border-radius:7px; cursor:pointer; }
-      .font-controls button:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
       .list-wrap { position:relative; min-height:0; }
       .list { height:100%; overflow:auto; scroll-behavior:smooth; padding: 12px 8px 120px; scrollbar-gutter:stable; }
       .empty { display:grid; place-items:center; min-height:240px; padding:32px; text-align:center; color:var(--yt-spec-text-secondary, #606060); font-size:14px; line-height:1.6; }
@@ -90,7 +83,6 @@
         border-left:3px solid transparent; border-radius:10px; color:inherit; background:transparent; text-align:left; cursor:pointer; }
       .cue:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.07)); }
       .cue.current { border-left-color:var(--cr-accent); background:var(--cr-accent-soft); }
-      .cue.no-favorite { grid-template-columns:48px minmax(0,1fr); padding-right:12px; }
       .list.select-mode .cue { cursor:text; user-select:text; }
       .time { padding-top:2px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; font-variant-numeric: tabular-nums; }
       .text { font-size: calc(16px * var(--cr-font-scale, 1)); line-height:1.55; overflow-wrap:anywhere; }
@@ -147,17 +139,8 @@
         <button class="icon-button collapse" type="button" title="收起文字稿" aria-label="收起文字稿">⌃</button>
       </header>
       <div class="toolbar">
-        <div class="segments" aria-label="字幕显示方式">
-          <button type="button" data-mode="sentences" class="active">完整句子</button>
-          <button type="button" data-mode="raw">原始分段</button>
-        </div>
-        <button type="button" class="interaction" title="切换为可选择文字">跳转模式</button>
         <div class="spacer"></div>
         <button type="button" class="follow active" title="自动跟随播放">● 跟随</button>
-        <div class="font-controls" aria-label="字号">
-          <button type="button" data-font="down" title="减小字号">A−</button>
-          <button type="button" data-font="up" title="增大字号">A+</button>
-        </div>
       </div>
       <div class="list-wrap">
         <div class="list" tabindex="0"><div class="empty">正在读取播放器的英文字幕…</div></div>
@@ -193,7 +176,7 @@
   }
 
   function currentItems() {
-    return state.mode === "sentences" ? state.sentences : state.rawCues;
+    return state.sentences;
   }
 
   function mountPanel() {
@@ -228,17 +211,8 @@
     favoriteCountElement = shadow.querySelector(".favorite-count");
     selectAllElement = shadow.querySelector(".select-all");
     exportStatusElement = shadow.querySelector(".export-status");
-    const interactionButton = shadow.querySelector(".interaction");
-
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
     shadow.querySelector(".favorites-toggle").addEventListener("click", toggleFavoritesView);
-    shadow.querySelectorAll("[data-mode]").forEach((button) => {
-      button.addEventListener("click", () => setMode(button.dataset.mode));
-    });
-    shadow.querySelectorAll("[data-font]").forEach((button) => {
-      button.addEventListener("click", () => changeFont(button.dataset.font === "up" ? 0.1 : -0.1));
-    });
-    interactionButton.addEventListener("click", toggleInteractionMode);
     selectAllElement.addEventListener("change", () => {
       state.selectedFavoriteIds = selectAllElement.checked
         ? new Set(state.favorites.map((favorite) => favorite.id))
@@ -264,8 +238,8 @@
       if (!removeButton) return;
       removeFavorite(removeButton.dataset.removeFavorite, true);
     });
-    followButton.addEventListener("click", () => setFollow(!state.follow, true));
-    resumeButton.addEventListener("click", () => setFollow(true, true));
+    followButton.addEventListener("click", () => setFollow(!state.follow, true, true));
+    resumeButton.addEventListener("click", () => setFollow(true, true, true));
     listElement.addEventListener("wheel", () => setFollow(false), { passive: true });
     listElement.addEventListener("touchstart", () => setFollow(false), { passive: true });
     listElement.addEventListener("pointerdown", (event) => {
@@ -294,16 +268,10 @@
   async function restorePreferences() {
     try {
       const saved = await chrome.storage.local.get({
-        captionRollMode: "sentences",
-        captionRollInteractionMode: "seek",
-        captionRollFontScale: 1,
-        captionRollCollapsed: false,
+        ...settingsEngine.defaults,
         captionRollFavorites: []
       });
-      state.mode = saved.captionRollMode === "raw" ? "raw" : "sentences";
-      state.interactionMode = saved.captionRollInteractionMode === "select" ? "select" : "seek";
-      state.fontScale = Math.min(1.4, Math.max(0.8, Number(saved.captionRollFontScale) || 1));
-      state.collapsed = Boolean(saved.captionRollCollapsed);
+      applySavedPreferences(saved);
       state.favorites = cardEngine.normalizeFavorites(saved.captionRollFavorites);
       state.selectedFavoriteIds = new Set(state.favorites.map((favorite) => favorite.id));
       applyPreferences();
@@ -315,9 +283,10 @@
   function savePreferences() {
     chrome.storage.local
       .set({
-        captionRollMode: state.mode,
+        captionRollPanelVisible: state.panelVisible,
         captionRollInteractionMode: state.interactionMode,
         captionRollFontScale: state.fontScale,
+        captionRollFollow: state.follow,
         captionRollCollapsed: state.collapsed
       })
       .catch(() => {});
@@ -329,19 +298,15 @@
 
   function applyPreferences() {
     if (!shadow) return;
+    host.hidden = !state.panelVisible;
     shadow.querySelector(".panel").classList.toggle("collapsed", state.collapsed);
     const collapseButton = shadow.querySelector(".collapse");
     collapseButton.textContent = state.collapsed ? "⌄" : "⌃";
     collapseButton.title = state.collapsed ? "展开文字稿" : "收起文字稿";
-    shadow.querySelectorAll("[data-mode]").forEach((button) => {
-      button.classList.toggle("active", button.dataset.mode === state.mode);
-    });
-    const interactionButton = shadow.querySelector(".interaction");
+    followButton?.classList.toggle("active", state.follow);
+    followButton?.setAttribute("aria-pressed", String(state.follow));
+    if (resumeButton) resumeButton.hidden = state.follow;
     const selecting = state.interactionMode === "select";
-    interactionButton.textContent = selecting ? "选字模式" : "跳转模式";
-    interactionButton.title = selecting ? "切换为点击字幕跳转" : "切换为可选择文字";
-    interactionButton.classList.toggle("select", selecting);
-    interactionButton.setAttribute("aria-pressed", String(selecting));
     listElement?.classList.toggle("select-mode", selecting);
     listElement?.querySelectorAll(".cue").forEach((row) => {
       row.title = selecting ? "拖动选择文字" : "点击跳转到此处";
@@ -358,6 +323,15 @@
     shadow.host.style.setProperty("--cr-font-scale", String(state.fontScale));
   }
 
+  function applySavedPreferences(saved) {
+    const normalized = settingsEngine.normalize(saved);
+    state.panelVisible = normalized.captionRollPanelVisible;
+    state.interactionMode = normalized.captionRollInteractionMode;
+    state.fontScale = normalized.captionRollFontScale;
+    state.follow = normalized.captionRollFollow;
+    state.collapsed = normalized.captionRollCollapsed;
+  }
+
   function toggleCollapsed() {
     state.collapsed = !state.collapsed;
     applyPreferences();
@@ -372,28 +346,6 @@
     else scrollToActive();
   }
 
-  function setMode(mode) {
-    if (mode !== "raw" && mode !== "sentences") return;
-    state.mode = mode;
-    state.activeIndex = -1;
-    applyPreferences();
-    renderList();
-    updatePlaybackPosition(true);
-    savePreferences();
-  }
-
-  function changeFont(delta) {
-    state.fontScale = Math.min(1.4, Math.max(0.8, Math.round((state.fontScale + delta) * 10) / 10));
-    applyPreferences();
-    savePreferences();
-  }
-
-  function toggleInteractionMode() {
-    state.interactionMode = state.interactionMode === "seek" ? "select" : "seek";
-    applyPreferences();
-    savePreferences();
-  }
-
   function currentVideoTitle() {
     const heading = document.querySelector("ytd-watch-metadata h1, #info-contents h1");
     return heading?.textContent?.trim() || document.title.replace(/\s+-\s+YouTube\s*$/, "").trim();
@@ -406,7 +358,6 @@
   }
 
   function toggleFavorite(index) {
-    if (state.mode !== "sentences") return;
     const item = state.sentences[index];
     if (!item || !state.videoId) return;
     const existing = favoriteForItem(item);
@@ -629,12 +580,13 @@
     }
   }
 
-  function setFollow(value, scrollNow = false) {
+  function setFollow(value, scrollNow = false, persist = false) {
     state.follow = Boolean(value);
     followButton?.classList.toggle("active", state.follow);
     followButton?.setAttribute("aria-pressed", String(state.follow));
     if (resumeButton) resumeButton.hidden = state.follow;
     if (state.follow && scrollNow) scrollToActive();
+    if (persist) savePreferences();
   }
 
   function seekToItem(index) {
@@ -649,8 +601,8 @@
     if (!statusElement) return;
     statusElement.textContent = state.statusMessage;
     if (state.rawCues.length) {
-      const count = state.mode === "sentences" ? state.sentences.length : state.rawCues.length;
-      metaElement.textContent = `${count} 条 · ${state.mode === "sentences" ? "智能整句" : "YouTube 原始分段"}${
+      const count = state.sentences.length;
+      metaElement.textContent = `${count} 条 · 智能整句${
         state.trackLabel ? ` · ${state.trackLabel}` : ""
       }`;
     } else {
@@ -690,19 +642,15 @@
       text.className = "text";
       text.textContent = item.text;
       row.append(time, text);
-      if (state.mode === "sentences") {
-        const saved = Boolean(favoriteForItem(item));
-        const favoriteButton = document.createElement("button");
-        favoriteButton.type = "button";
-        favoriteButton.className = `favorite-action${saved ? " saved" : ""}`;
-        favoriteButton.dataset.favoriteIndex = String(index);
-        favoriteButton.title = saved ? "取消收藏" : "收藏句子";
-        favoriteButton.setAttribute("aria-label", favoriteButton.title);
-        favoriteButton.textContent = saved ? "★" : "☆";
-        row.append(favoriteButton);
-      } else {
-        row.classList.add("no-favorite");
-      }
+      const saved = Boolean(favoriteForItem(item));
+      const favoriteButton = document.createElement("button");
+      favoriteButton.type = "button";
+      favoriteButton.className = `favorite-action${saved ? " saved" : ""}`;
+      favoriteButton.dataset.favoriteIndex = String(index);
+      favoriteButton.title = saved ? "取消收藏" : "收藏句子";
+      favoriteButton.setAttribute("aria-label", favoriteButton.title);
+      favoriteButton.textContent = saved ? "★" : "☆";
+      row.append(favoriteButton);
       fragment.append(row);
     });
     listElement.append(fragment);
@@ -787,8 +735,16 @@
   }
 
   window.addEventListener("message", handleMessage);
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === "CAPTIONROLL/TOGGLE") toggleCollapsed();
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") return;
+    const changedSettings = Object.keys(settingsEngine.defaults).some((key) => key in changes);
+    if (!changedSettings) return;
+    void chrome.storage.local.get(settingsEngine.defaults).then((saved) => {
+      applySavedPreferences(saved);
+      applyPreferences();
+      renderList();
+      updatePlaybackPosition(true);
+    });
   });
 
   function start() {

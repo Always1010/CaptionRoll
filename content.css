@@ -8,6 +8,10 @@
   box-sizing: border-box;
 }
 
+#captionroll-host[hidden] {
+  display: none !important;
+}
+
 #secondary.captionroll-secondary {
   box-sizing: border-box;
 }
