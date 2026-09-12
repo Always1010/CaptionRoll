@@ -8,12 +8,11 @@
 
   let videoId = null;
   let englishTrack = null;
-  let potUrl = null;
+  let transcriptUrl = null;
   let fetchInFlight = false;
   let deliveredSignature = "";
   let lastStatus = "";
   let announceAttempts = 0;
-  let nudgeAttempts = 0;
   let fetchAttempts = 0;
   let nextFetchAt = 0;
   let timer = 0;
@@ -73,11 +72,11 @@
     try {
       const url = new URL(rawUrl, location.href);
       if (url.searchParams.get("v") !== videoId) return;
-      if (potUrl !== url.href) {
+      if (transcriptUrl !== url.href) {
         fetchAttempts = 0;
         nextFetchAt = 0;
       }
-      potUrl = url.href;
+      transcriptUrl = url.href;
       void fetchEnglishTranscript();
     } catch (_) {}
   }
@@ -177,7 +176,7 @@
 
   async function fetchEnglishTranscript() {
     if (
-      !potUrl ||
+      !transcriptUrl ||
       !englishTrack ||
       fetchInFlight ||
       deliveredSignature ||
@@ -190,7 +189,7 @@
     fetchAttempts += 1;
     nextFetchAt = Date.now() + Math.min(8000, 500 * 2 ** fetchAttempts);
     try {
-      const url = new URL(potUrl);
+      const url = new URL(transcriptUrl);
       url.searchParams.set("fmt", "json3");
       url.searchParams.set("lang", englishTrack.languageCode);
       url.searchParams.delete("tlang");
@@ -247,27 +246,11 @@
     return originalXhrOpen.call(this, method, rawUrl, ...rest);
   };
 
-  function selectAndLoadEnglishTrack() {
-    const player = getPlayer();
-    if (!player || !englishTrack || deliveredSignature) return;
-
-    try {
-      const current = player.getOption?.("captions", "track");
-      const currentLanguage = String(current?.languageCode ?? "").toLowerCase();
-      if (!currentLanguage.startsWith("en") && nudgeAttempts < 3) {
-        player.loadModule?.("captions");
-        player.setOption?.("captions", "track", {
-          languageCode: englishTrack.languageCode,
-          vssId: englishTrack.vssId,
-          kind: englishTrack.kind,
-          name: englishTrack.name
-        });
-      }
-      if (!potUrl && nudgeAttempts < 8) {
-        nudgeAttempts += 1;
-        player.setOption?.("captions", "reload", true);
-      }
-    } catch (_) {}
+  function useTrackTranscriptUrl() {
+    if (transcriptUrl || !englishTrack?.baseUrl) return;
+    transcriptUrl = englishTrack.baseUrl;
+    fetchAttempts = 0;
+    nextFetchAt = 0;
   }
 
   function discoverTrack() {
@@ -289,7 +272,7 @@
     announceAttempts += 1;
     if (!englishTrack) discoverTrack();
     if (englishTrack) {
-      selectAndLoadEnglishTrack();
+      useTrackTranscriptUrl();
       void fetchEnglishTranscript();
     } else if (announceAttempts > 30) {
       postStatus("no-captions", "没有找到英文字幕轨道");
@@ -301,12 +284,11 @@
     clearTimeout(timer);
     videoId = getVideoId();
     englishTrack = null;
-    potUrl = null;
+    transcriptUrl = null;
     fetchInFlight = false;
     deliveredSignature = "";
     lastStatus = "";
     announceAttempts = 0;
-    nudgeAttempts = 0;
     fetchAttempts = 0;
     nextFetchAt = 0;
     post("NAV", { videoId });
