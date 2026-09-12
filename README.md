@@ -7,6 +7,7 @@ CaptionRoll 是一个适用于 Microsoft Edge 和 Google Chrome 的 YouTube 英�
 - 打开普通 YouTube 视频页时默认显示醒目的文字稿面板。
 - 宽屏时停靠在视频右侧；YouTube 将侧栏移到下方时随页面布局移动。
 - 自动选择并加载优先级最高的英文字幕轨道。
+- 文字稿独立于播放器 CC 开关加载，不会修改用户的字幕开启状态或所选轨道。
 - 捕获播放器自己的 timed-text 请求，兼容当前字幕来源验证机制。
 - 将 YouTube 的碎片字幕智能合并成更完整的英文句子。
 - “完整句子 / 原始分段”随时切换。
@@ -58,4 +59,5 @@ CaptionRoll 是一个适用于 Microsoft Edge 和 Google Chrome 的 YouTube 英�
 ```powershell
 node tests/sentence-engine.test.js
 node tests/card-engine.test.js
+node tests/page-hook.test.js
 ```
