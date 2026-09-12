@@ -6,12 +6,6 @@
   const follow = document.querySelector('[data-setting="captionRollFollow"]');
   const expanded = document.querySelector('[data-setting="captionRollExpanded"]');
   const videoCaptions = document.querySelector('[data-setting="captionRollVideoCaptions"]');
-  const captionFontScale = document.querySelector('[data-setting="captionRollCaptionFontScale"]');
-  const captionPosition = document.querySelector('[data-setting="captionRollCaptionPosition"]');
-  const captionBackground = document.querySelector('[data-setting="captionRollCaptionBackground"]');
-  const captionFontOutput = document.querySelector('[data-output="captionRollCaptionFontScale"]');
-  const captionPositionOutput = document.querySelector('[data-output="captionRollCaptionPosition"]');
-  const captionBackgroundOutput = document.querySelector('[data-output="captionRollCaptionBackground"]');
   const status = document.querySelector(".saved");
 
   function render(settings) {
@@ -19,12 +13,6 @@
     follow.checked = settings.captionRollFollow;
     expanded.checked = !settings.captionRollCollapsed;
     videoCaptions.checked = settings.captionRollVideoCaptions;
-    captionFontScale.value = String(settings.captionRollCaptionFontScale);
-    captionPosition.value = String(settings.captionRollCaptionPosition);
-    captionBackground.value = String(settings.captionRollCaptionBackground);
-    captionFontOutput.value = `${Math.round(settings.captionRollCaptionFontScale * 100)}%`;
-    captionPositionOutput.value = `${settings.captionRollCaptionPosition}%`;
-    captionBackgroundOutput.value = `${Math.round(settings.captionRollCaptionBackground * 100)}%`;
     document.querySelector(
       `input[name="interaction"][value="${settings.captionRollInteractionMode}"]`
     ).checked = true;
@@ -48,24 +36,6 @@
   expanded.addEventListener("change", () => save({ captionRollCollapsed: !expanded.checked }));
   videoCaptions.addEventListener("change", () =>
     save({ captionRollVideoCaptions: videoCaptions.checked })
-  );
-  captionFontScale.addEventListener("input", () => {
-    captionFontOutput.value = `${Math.round(Number(captionFontScale.value) * 100)}%`;
-  });
-  captionFontScale.addEventListener("change", () =>
-    save({ captionRollCaptionFontScale: Number(captionFontScale.value) })
-  );
-  captionPosition.addEventListener("input", () => {
-    captionPositionOutput.value = `${captionPosition.value}%`;
-  });
-  captionPosition.addEventListener("change", () =>
-    save({ captionRollCaptionPosition: Number(captionPosition.value) })
-  );
-  captionBackground.addEventListener("input", () => {
-    captionBackgroundOutput.value = `${Math.round(Number(captionBackground.value) * 100)}%`;
-  });
-  captionBackground.addEventListener("change", () =>
-    save({ captionRollCaptionBackground: Number(captionBackground.value) })
   );
   document.querySelectorAll('input[name="interaction"]').forEach((input) => {
     input.addEventListener("change", () => {

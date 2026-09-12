@@ -23,7 +23,12 @@ assert.equal(manifest.action.default_popup, "popup.html");
 assert.match(popup, /captionRollInteractionMode|name="interaction"/);
 assert.doesNotMatch(popup, /captionRollFontScale/);
 assert.match(popup, /captionRollVideoCaptions/);
-assert.match(popup, /captionRollCaptionPosition/);
+assert.doesNotMatch(popup, /captionRollCaptionFontScale/);
+assert.doesNotMatch(popup, /captionRollCaptionPosition/);
+assert.doesNotMatch(popup, /captionRollCaptionBackground/);
+assert.match(content, /data-caption-font="up"/);
+assert.match(content, /data-caption-position/);
+assert.match(content, /data-caption-background/);
 assert.doesNotMatch(content, /data-mode="raw"/);
 
 console.log("settings: all tests passed");

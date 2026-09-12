@@ -188,8 +188,13 @@
     <style>
       :host { position:absolute; inset:0; display:block; pointer-events:none; }
       * { box-sizing:border-box; }
-      .caption {
+      button, input { font:inherit; }
+      .caption-shell {
         position:absolute; left:5%; right:5%; bottom:var(--cr-caption-position, 12%);
+        display:flex; justify-content:center; align-items:flex-end; gap:8px;
+      }
+      .caption-shell[hidden] { display:none; }
+      .caption {
         display:flex; justify-content:center; text-align:center;
         font-family:Roboto, Arial, sans-serif; font-size:var(--cr-caption-font-size, 28px);
         font-weight:600; line-height:1.35; color:#fff;
@@ -200,9 +205,58 @@
         background:rgba(0,0,0,var(--cr-caption-background, .7));
         box-decoration-break:clone; -webkit-box-decoration-break:clone;
       }
-      .caption[hidden] { display:none; }
+      .caption-settings { position:relative; flex:0 0 auto; pointer-events:auto; }
+      .caption-settings-trigger {
+        width:34px; height:30px; border:1px solid rgba(255,255,255,.35); border-radius:8px;
+        color:#fff; background:rgba(0,0,0,.58); cursor:pointer; font-size:12px; font-weight:700;
+        opacity:.35; transition:opacity .15s ease, background .15s ease;
+      }
+      :host-context(#movie_player:hover) .caption-settings-trigger,
+      .caption-settings-trigger:hover,
+      .caption-settings-trigger[aria-expanded="true"] { opacity:1; background:rgba(0,0,0,.78); }
+      .caption-settings-popover {
+        position:absolute; right:0; bottom:calc(100% + 8px); width:224px; padding:12px;
+        border:1px solid rgba(255,255,255,.22); border-radius:12px;
+        color:#fff; background:rgba(24,24,24,.96); box-shadow:0 8px 28px rgba(0,0,0,.45);
+        font:12px/1.35 Roboto, Arial, sans-serif; text-shadow:none;
+      }
+      .caption-settings-popover[hidden] { display:none; }
+      .caption-setting-row { display:grid; grid-template-columns:62px minmax(0,1fr); align-items:center; gap:10px; margin-bottom:11px; }
+      .caption-setting-row:last-of-type { margin-bottom:10px; }
+      .caption-font-buttons { display:flex; gap:6px; }
+      .caption-font-buttons button, .caption-reset {
+        border:0; border-radius:7px; color:#fff; background:rgba(255,255,255,.14); cursor:pointer;
+      }
+      .caption-font-buttons button { width:42px; height:30px; }
+      .caption-font-buttons button:hover, .caption-reset:hover { background:rgba(255,255,255,.24); }
+      .caption-setting-row input { width:100%; accent-color:#5da2ff; }
+      .caption-setting-label { color:rgba(255,255,255,.76); }
+      .caption-reset { width:100%; padding:7px 10px; }
     </style>
-    <div class="caption" hidden aria-live="off"><span></span></div>
+    <div class="caption-shell" hidden>
+      <div class="caption" aria-live="off"><span></span></div>
+      <div class="caption-settings">
+        <button class="caption-settings-trigger" type="button" title="调整整句字幕" aria-label="调整整句字幕" aria-expanded="false">Aa</button>
+        <div class="caption-settings-popover" hidden>
+          <div class="caption-setting-row">
+            <span class="caption-setting-label">字号</span>
+            <div class="caption-font-buttons">
+              <button type="button" data-caption-font="down" title="减小字幕字号">A−</button>
+              <button type="button" data-caption-font="up" title="增大字幕字号">A+</button>
+            </div>
+          </div>
+          <label class="caption-setting-row">
+            <span class="caption-setting-label">位置</span>
+            <input type="range" min="4" max="24" step="1" data-caption-position>
+          </label>
+          <label class="caption-setting-row">
+            <span class="caption-setting-label">背景</span>
+            <input type="range" min="0" max="0.9" step="0.1" data-caption-background>
+          </label>
+          <button class="caption-reset" type="button">恢复默认样式</button>
+        </div>
+      </div>
+    </div>
   `;
 
   function formatTime(milliseconds) {
@@ -251,10 +305,66 @@
       videoCaptionShadow = videoCaptionHost.attachShadow({ mode: "open" });
       videoCaptionShadow.innerHTML = videoCaptionTemplate;
       videoCaptionText = videoCaptionShadow.querySelector(".caption span");
+      bindVideoCaptionUi();
     }
     player.append(videoCaptionHost);
     applyVideoCaptionPreferences();
     return true;
+  }
+
+  function bindVideoCaptionUi() {
+    const trigger = videoCaptionShadow.querySelector(".caption-settings-trigger");
+    const popover = videoCaptionShadow.querySelector(".caption-settings-popover");
+    trigger.addEventListener("click", () => {
+      popover.hidden = !popover.hidden;
+      trigger.setAttribute("aria-expanded", String(!popover.hidden));
+    });
+    videoCaptionShadow.querySelectorAll("[data-caption-font]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const delta = button.dataset.captionFont === "up" ? 0.1 : -0.1;
+        state.captionFontScale = Math.min(
+          1.6,
+          Math.max(0.8, Math.round((state.captionFontScale + delta) * 10) / 10)
+        );
+        applyVideoCaptionPreferences();
+        saveVideoCaptionPreferences();
+      });
+    });
+    const position = videoCaptionShadow.querySelector("[data-caption-position]");
+    position.addEventListener("input", () => {
+      state.captionPosition = Number(position.value);
+      applyVideoCaptionPreferences();
+    });
+    position.addEventListener("change", saveVideoCaptionPreferences);
+    const background = videoCaptionShadow.querySelector("[data-caption-background]");
+    background.addEventListener("input", () => {
+      state.captionBackground = Number(background.value);
+      applyVideoCaptionPreferences();
+    });
+    background.addEventListener("change", saveVideoCaptionPreferences);
+    videoCaptionShadow.querySelector(".caption-reset").addEventListener("click", () => {
+      state.captionFontScale = settingsEngine.defaults.captionRollCaptionFontScale;
+      state.captionPosition = settingsEngine.defaults.captionRollCaptionPosition;
+      state.captionBackground = settingsEngine.defaults.captionRollCaptionBackground;
+      applyVideoCaptionPreferences();
+      saveVideoCaptionPreferences();
+    });
+    videoCaptionShadow.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || popover.hidden) return;
+      popover.hidden = true;
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.focus();
+    });
+  }
+
+  function saveVideoCaptionPreferences() {
+    chrome.storage.local
+      .set({
+        captionRollCaptionFontScale: state.captionFontScale,
+        captionRollCaptionPosition: state.captionPosition,
+        captionRollCaptionBackground: state.captionBackground
+      })
+      .catch(() => {});
   }
 
   function bindUi() {
@@ -398,11 +508,16 @@
     );
     videoCaptionHost.style.setProperty("--cr-caption-position", `${state.captionPosition}%`);
     videoCaptionHost.style.setProperty("--cr-caption-background", String(state.captionBackground));
+    videoCaptionShadow.querySelector("[data-caption-position]").value = String(state.captionPosition);
+    videoCaptionShadow.querySelector("[data-caption-background]").value = String(state.captionBackground);
     const player = document.getElementById("movie_player");
     const replaceNativeCaptions = state.videoCaptions && state.sentences.length > 0;
     player?.classList.toggle("captionroll-full-sentence-captions", replaceNativeCaptions);
     if (!state.videoCaptions) {
-      videoCaptionShadow.querySelector(".caption").hidden = true;
+      videoCaptionShadow.querySelector(".caption-shell").hidden = true;
+      const popover = videoCaptionShadow.querySelector(".caption-settings-popover");
+      popover.hidden = true;
+      videoCaptionShadow.querySelector(".caption-settings-trigger").setAttribute("aria-expanded", "false");
       if (videoCaptionText) videoCaptionText.textContent = "";
     }
   }
@@ -780,9 +895,9 @@
 
   function updateVideoCaption(currentMs, activeIndex) {
     if (!videoCaptionHost?.isConnected) mountVideoCaption();
-    const caption = videoCaptionShadow?.querySelector(".caption");
-    if (!caption || !state.videoCaptions) {
-      if (caption) caption.hidden = true;
+    const shell = videoCaptionShadow?.querySelector(".caption-shell");
+    if (!shell || !state.videoCaptions) {
+      if (shell) shell.hidden = true;
       return;
     }
     const sentence = state.sentences[activeIndex];
@@ -791,12 +906,12 @@
       currentMs >= sentence.startMs - 80 &&
       currentMs <= sentence.endMs + 120;
     if (!isActive) {
-      caption.hidden = true;
+      shell.hidden = true;
       if (videoCaptionText) videoCaptionText.textContent = "";
       return;
     }
     if (videoCaptionText.textContent !== sentence.text) videoCaptionText.textContent = sentence.text;
-    caption.hidden = false;
+    shell.hidden = false;
   }
 
   function updatePlaybackPosition(force = false) {

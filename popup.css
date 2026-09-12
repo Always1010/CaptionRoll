@@ -88,10 +88,6 @@ input[type="checkbox"] {
 }
 .segmented input:checked + span { color: #fff; background: #2f80ed; }
 
-.range-heading { display: flex; justify-content: space-between; align-items: start; }
-output { color: #2f80ed; font-size: 12px; font-weight: 650; }
-input[type="range"] { width: 100%; accent-color: #2f80ed; }
-
 .saved {
   margin: 12px 0 0;
   text-align: center;
