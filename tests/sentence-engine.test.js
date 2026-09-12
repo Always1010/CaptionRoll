@@ -31,4 +31,50 @@ const paused = mergeIntoSentences([
 ]);
 assert.equal(paused.length, 2);
 
+const suffixSentences = mergeIntoSentences([
+  { startMs: 0, endMs: 1000, text: "This is a podcast." },
+  { startMs: 900, endMs: 2000, text: "So we continue." },
+  { startMs: 1900, endMs: 3000, text: "This is a test." }
+]);
+assert.deepEqual(
+  suffixSentences.map((sentence) => sentence.text),
+  ["This is a podcast.", "So we continue.", "This is a test."]
+);
+
+const abbreviation = mergeIntoSentences([
+  { startMs: 0, endMs: 1000, text: "I spoke with Dr." },
+  { startMs: 900, endMs: 2000, text: "Smith yesterday." }
+]);
+assert.deepEqual(abbreviation.map((sentence) => sentence.text), ["I spoke with Dr. Smith yesterday."]);
+
+const longSpokenSentence = mergeIntoSentences([
+  { startMs: 17000, endMs: 22000, text: "[laughter] Um but I thought that actually this whole idea" },
+  { startMs: 22000, endMs: 27000, text: "of English names um for English learners or people speaking" },
+  { startMs: 27000, endMs: 33000, text: "English as a second or third or fourth" },
+  {
+    startMs: 29000,
+    endMs: 38000,
+    text: "uh language was a really really interesting topic actually and that it would be a fun thing to explore on this podcast. So today we are going to be asking the"
+  },
+  { startMs: 42000, endMs: 45000, text: "question should you choose an English name?" }
+]);
+assert.deepEqual(
+  longSpokenSentence.map((sentence) => sentence.text),
+  [
+    "[laughter] Um but I thought that actually this whole idea of English names um for English learners or people speaking English as a second or third or fourth uh language was a really really interesting topic actually and that it would be a fun thing to explore on this podcast.",
+    "So today we are going to be asking the question should you choose an English name?"
+  ]
+);
+
+const longUnpunctuatedLead = Array.from({ length: 63 }, (_, index) => `word${index}`).join(" ");
+const safeFallback = mergeIntoSentences([
+  { startMs: 0, endMs: 31000, text: `${longUnpunctuatedLead} the` },
+  { startMs: 30000, endMs: 33000, text: "question appears" },
+  { startMs: 33000, endMs: 35000, text: "Another topic follows." }
+]);
+assert.deepEqual(
+  safeFallback.map((sentence) => sentence.text),
+  [`${longUnpunctuatedLead} the question appears`, "Another topic follows."]
+);
+
 console.log("sentence-engine: all tests passed");
