@@ -105,7 +105,8 @@ const result = await evaluate(
     hasTranscriptFontControls: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.font-controls')),
     hasFavorites: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.favorites-toggle')),
     hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export')),
-    hasVideoCaptionHost: Boolean(document.getElementById('captionroll-video-caption-host'))
+    hasVideoCaptionHost: Boolean(document.getElementById('captionroll-video-caption-host')),
+    hasInlineCaptionSettings: Boolean(document.getElementById('captionroll-video-caption-host')?.shadowRoot?.querySelector('.caption-settings-trigger'))
   })`
 );
 console.log(JSON.stringify(result, null, 2));
@@ -116,7 +117,8 @@ if (
   !result?.hasTranscriptFontControls ||
   !result?.hasFavorites ||
   !result?.hasQuizletExport ||
-  !result?.hasVideoCaptionHost
+  !result?.hasVideoCaptionHost ||
+  !result?.hasInlineCaptionSettings
 ) {
   process.exitCode = 1;
 }
@@ -157,15 +159,54 @@ if (result?.cueCount > 0) {
       const player = document.getElementById('movie_player');
       const host = document.getElementById('captionroll-video-caption-host');
       const caption = host?.shadowRoot?.querySelector('.caption');
+      const shell = host?.shadowRoot?.querySelector('.caption-shell');
       return {
         text: caption?.textContent?.trim() ?? '',
-        visible: Boolean(caption && !caption.hidden),
+        visible: Boolean(shell && !shell.hidden),
         nativeCaptionsHidden: player?.classList.contains('captionroll-full-sentence-captions') ?? false
       };
     })()`
   );
   console.log(JSON.stringify({ videoCaption }, null, 2));
   if (!videoCaption.visible || !videoCaption.text || !videoCaption.nativeCaptionsHidden) {
+    process.exitCode = 1;
+  }
+
+  const captionControls = await evaluate(
+    target,
+    `(() => {
+      const host = document.getElementById('captionroll-video-caption-host');
+      const root = host?.shadowRoot;
+      const trigger = root?.querySelector('.caption-settings-trigger');
+      const popover = root?.querySelector('.caption-settings-popover');
+      const fontUp = root?.querySelector('[data-caption-font="up"]');
+      const position = root?.querySelector('[data-caption-position]');
+      const background = root?.querySelector('[data-caption-background]');
+      const fontBefore = host?.style.getPropertyValue('--cr-caption-font-size') ?? '';
+      trigger?.click();
+      const popoverVisible = Boolean(popover && !popover.hidden);
+      fontUp?.click();
+      const fontAfter = host?.style.getPropertyValue('--cr-caption-font-size') ?? '';
+      if (position) {
+        position.value = '16';
+        position.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const positionAfter = host?.style.getPropertyValue('--cr-caption-position') ?? '';
+      if (background) {
+        background.value = '0.4';
+        background.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+      const backgroundAfter = host?.style.getPropertyValue('--cr-caption-background') ?? '';
+      return { popoverVisible, fontBefore, fontAfter, positionAfter, backgroundAfter };
+    })()`
+  );
+  console.log(JSON.stringify({ captionControls }, null, 2));
+  if (
+    !captionControls.popoverVisible ||
+    parseFloat(captionControls.fontAfter) <= parseFloat(captionControls.fontBefore) ||
+    captionControls.positionAfter !== '16%' ||
+    captionControls.backgroundAfter !== '0.4'
+  ) {
     process.exitCode = 1;
   }
 
