@@ -47,6 +47,7 @@
   let observer = null;
   let translatorSession = null;
   let translating = false;
+  let interactionModeOverridden = false;
 
   const template = `
     <style>
@@ -455,7 +456,6 @@
     chrome.storage.local
       .set({
         captionRollPanelVisible: state.panelVisible,
-        captionRollInteractionMode: state.interactionMode,
         captionRollFontScale: state.fontScale,
         captionRollFollow: state.follow,
         captionRollCollapsed: state.collapsed
@@ -480,7 +480,9 @@
     const selecting = state.interactionMode === "select";
     const interactionButton = shadow.querySelector(".interaction");
     interactionButton.textContent = selecting ? "选字模式" : "跳转模式";
-    interactionButton.title = selecting ? "切换为点击字幕跳转" : "切换为可选择文字";
+    interactionButton.title = selecting
+      ? "当前标签页：切换为点击字幕跳转"
+      : "当前标签页：切换为可选择文字";
     interactionButton.classList.toggle("select", selecting);
     interactionButton.setAttribute("aria-pressed", String(selecting));
     listElement?.classList.toggle("select-mode", selecting);
@@ -522,10 +524,12 @@
     }
   }
 
-  function applySavedPreferences(saved) {
+  function applySavedPreferences(saved, preserveInteractionOverride = false) {
     const normalized = settingsEngine.normalize(saved);
     state.panelVisible = normalized.captionRollPanelVisible;
-    state.interactionMode = normalized.captionRollInteractionMode;
+    if (!preserveInteractionOverride || !interactionModeOverridden) {
+      state.interactionMode = normalized.captionRollInteractionMode;
+    }
     state.fontScale = normalized.captionRollFontScale;
     state.follow = normalized.captionRollFollow;
     state.collapsed = normalized.captionRollCollapsed;
@@ -551,8 +555,8 @@
 
   function toggleInteractionMode() {
     state.interactionMode = state.interactionMode === "seek" ? "select" : "seek";
+    interactionModeOverridden = true;
     applyPreferences();
-    savePreferences();
   }
 
   function changeFont(delta) {
@@ -984,7 +988,7 @@
     const changedSettings = Object.keys(settingsEngine.defaults).some((key) => key in changes);
     if (!changedSettings) return;
     void chrome.storage.local.get(settingsEngine.defaults).then((saved) => {
-      applySavedPreferences(saved);
+      applySavedPreferences(saved, true);
       applyPreferences();
       renderList();
       updatePlaybackPosition(true);
