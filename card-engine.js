@@ -59,7 +59,26 @@
     return result;
   }
 
-  const api = { createFavorite, createFavoriteId, normalizeCardText, normalizeFavorite, normalizeFavorites };
+  function sanitizeQuizletField(value) {
+    return normalizeCardText(value).replace(/\t/g, " ");
+  }
+
+  function buildQuizletImport(input) {
+    return normalizeFavorites(input)
+      .filter((favorite) => favorite.chinese && favorite.english)
+      .map((favorite) => `${sanitizeQuizletField(favorite.chinese)}\t${sanitizeQuizletField(favorite.english)}`)
+      .join("\n");
+  }
+
+  const api = {
+    buildQuizletImport,
+    createFavorite,
+    createFavoriteId,
+    normalizeCardText,
+    normalizeFavorite,
+    normalizeFavorites,
+    sanitizeQuizletField
+  };
   root.CaptionRollCards = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

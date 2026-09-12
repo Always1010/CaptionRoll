@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CaptionRoll",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A larger, sentence-aware English transcript for YouTube.",
   "minimum_chrome_version": "111",
   "permissions": ["storage"],
