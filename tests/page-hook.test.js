@@ -7,5 +7,9 @@ const source = readFileSync(join(__dirname, "..", "page-hook.js"), "utf8");
 assert.match(source, /englishTrack\.baseUrl/);
 assert.doesNotMatch(source, /setOption\?\.\(\s*["']captions["']/);
 assert.doesNotMatch(source, /loadModule\?\.\(\s*["']captions["']/);
+assert.match(
+  source,
+  /!deliverCues\(parseTimedText\(body\), "timed-text"\) && !deliveredSignature/
+);
 
 console.log("page-hook: caption preference guard passed");
