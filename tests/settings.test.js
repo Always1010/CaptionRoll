@@ -29,6 +29,12 @@ assert.doesNotMatch(popup, /captionRollCaptionBackground/);
 assert.match(content, /data-caption-font="up"/);
 assert.match(content, /data-caption-position/);
 assert.match(content, /data-caption-background/);
+const interactionToggle = content.match(/function toggleInteractionMode\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+const preferenceWriter = content.match(/function savePreferences\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+assert.match(interactionToggle, /interactionModeOverridden = true/);
+assert.doesNotMatch(interactionToggle, /savePreferences/);
+assert.doesNotMatch(preferenceWriter, /captionRollInteractionMode/);
+assert.match(popup, /默认点击字幕时/);
 assert.doesNotMatch(content, /data-mode="raw"/);
 
 console.log("settings: all tests passed");
