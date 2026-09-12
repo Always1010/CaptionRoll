@@ -19,6 +19,10 @@
     follow: true,
     collapsed: false,
     fontScale: 1,
+    videoCaptions: true,
+    captionFontScale: 1,
+    captionPosition: 12,
+    captionBackground: 0.7,
     activeIndex: -1,
     statusCode: "loading",
     statusMessage: "正在查找英文字幕…",
@@ -37,6 +41,9 @@
   let selectAllElement = null;
   let exportStatusElement = null;
   let videoElement = null;
+  let videoCaptionHost = null;
+  let videoCaptionShadow = null;
+  let videoCaptionText = null;
   let observer = null;
   let translatorSession = null;
   let translating = false;
@@ -166,6 +173,27 @@
     </section>
   `;
 
+  const videoCaptionTemplate = `
+    <style>
+      :host { position:absolute; inset:0; display:block; pointer-events:none; }
+      * { box-sizing:border-box; }
+      .caption {
+        position:absolute; left:5%; right:5%; bottom:var(--cr-caption-position, 12%);
+        display:flex; justify-content:center; text-align:center;
+        font-family:Roboto, Arial, sans-serif; font-size:var(--cr-caption-font-size, 28px);
+        font-weight:600; line-height:1.35; color:#fff;
+        text-shadow:0 1px 2px rgba(0,0,0,.95), 0 0 4px rgba(0,0,0,.75);
+      }
+      .caption span {
+        max-width:92%; padding:.16em .38em .2em; border-radius:.22em;
+        background:rgba(0,0,0,var(--cr-caption-background, .7));
+        box-decoration-break:clone; -webkit-box-decoration-break:clone;
+      }
+      .caption[hidden] { display:none; }
+    </style>
+    <div class="caption" hidden aria-live="off"><span></span></div>
+  `;
+
   function formatTime(milliseconds) {
     const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
     const hours = Math.floor(totalSeconds / 3600);
@@ -198,6 +226,23 @@
     }
     mount.prepend(host);
     if (secondary) secondary.classList.add("captionroll-secondary");
+    return true;
+  }
+
+  function mountVideoCaption() {
+    const player = document.getElementById("movie_player");
+    if (!player) return false;
+    if (videoCaptionHost?.isConnected && videoCaptionHost.parentElement === player) return true;
+
+    if (!videoCaptionHost) {
+      videoCaptionHost = document.createElement("div");
+      videoCaptionHost.id = "captionroll-video-caption-host";
+      videoCaptionShadow = videoCaptionHost.attachShadow({ mode: "open" });
+      videoCaptionShadow.innerHTML = videoCaptionTemplate;
+      videoCaptionText = videoCaptionShadow.querySelector(".caption span");
+    }
+    player.append(videoCaptionHost);
+    applyVideoCaptionPreferences();
     return true;
   }
 
@@ -321,6 +366,24 @@
     favoritesButton.title = favoritesOpen ? "返回文字稿" : "打开收藏夹";
     favoritesButton.setAttribute("aria-label", favoritesButton.title);
     shadow.host.style.setProperty("--cr-font-scale", String(state.fontScale));
+    applyVideoCaptionPreferences();
+  }
+
+  function applyVideoCaptionPreferences() {
+    if (!videoCaptionHost || !videoCaptionShadow) return;
+    videoCaptionHost.style.setProperty(
+      "--cr-caption-font-size",
+      `${Math.round(28 * state.captionFontScale)}px`
+    );
+    videoCaptionHost.style.setProperty("--cr-caption-position", `${state.captionPosition}%`);
+    videoCaptionHost.style.setProperty("--cr-caption-background", String(state.captionBackground));
+    const player = document.getElementById("movie_player");
+    const replaceNativeCaptions = state.videoCaptions && state.sentences.length > 0;
+    player?.classList.toggle("captionroll-full-sentence-captions", replaceNativeCaptions);
+    if (!state.videoCaptions) {
+      videoCaptionShadow.querySelector(".caption").hidden = true;
+      if (videoCaptionText) videoCaptionText.textContent = "";
+    }
   }
 
   function applySavedPreferences(saved) {
@@ -330,6 +393,10 @@
     state.fontScale = normalized.captionRollFontScale;
     state.follow = normalized.captionRollFollow;
     state.collapsed = normalized.captionRollCollapsed;
+    state.videoCaptions = normalized.captionRollVideoCaptions;
+    state.captionFontScale = normalized.captionRollCaptionFontScale;
+    state.captionPosition = normalized.captionRollCaptionPosition;
+    state.captionBackground = normalized.captionRollCaptionBackground;
   }
 
   function toggleCollapsed() {
@@ -678,11 +745,37 @@
     return answer;
   }
 
+  function updateVideoCaption(currentMs, activeIndex) {
+    if (!videoCaptionHost?.isConnected) mountVideoCaption();
+    const caption = videoCaptionShadow?.querySelector(".caption");
+    if (!caption || !state.videoCaptions) {
+      if (caption) caption.hidden = true;
+      return;
+    }
+    const sentence = state.sentences[activeIndex];
+    const isActive =
+      sentence &&
+      currentMs >= sentence.startMs - 80 &&
+      currentMs <= sentence.endMs + 120;
+    if (!isActive) {
+      caption.hidden = true;
+      if (videoCaptionText) videoCaptionText.textContent = "";
+      return;
+    }
+    if (videoCaptionText.textContent !== sentence.text) videoCaptionText.textContent = sentence.text;
+    caption.hidden = false;
+  }
+
   function updatePlaybackPosition(force = false) {
     const video = getVideo();
     const items = currentItems();
-    if (!video || !items.length) return;
-    const nextIndex = findActiveIndex(items, video.currentTime * 1000);
+    const currentMs = video ? video.currentTime * 1000 : 0;
+    if (!video || !items.length) {
+      updateVideoCaption(currentMs, -1);
+      return;
+    }
+    const nextIndex = findActiveIndex(items, currentMs);
+    updateVideoCaption(currentMs, nextIndex);
     if (!force && nextIndex === state.activeIndex) return;
     listElement?.querySelector(".cue.current")?.classList.remove("current");
     state.activeIndex = nextIndex;
@@ -712,6 +805,8 @@
       state.statusMessage = state.videoId ? "正在查找英文字幕…" : "请打开一个 YouTube 视频";
       state.trackLabel = "";
       renderList();
+      applyVideoCaptionPreferences();
+      updateVideoCaption(0, -1);
       return;
     }
 
@@ -729,6 +824,7 @@
       state.statusCode = "ready";
       state.statusMessage = `已加载 ${state.trackLabel}`;
       state.activeIndex = -1;
+      applyVideoCaptionPreferences();
       renderList();
       updatePlaybackPosition(true);
     }
@@ -749,7 +845,11 @@
 
   function start() {
     mountPanel();
-    observer = new MutationObserver(() => mountPanel());
+    mountVideoCaption();
+    observer = new MutationObserver(() => {
+      mountPanel();
+      mountVideoCaption();
+    });
     observer.observe(document.documentElement, { childList: true, subtree: true });
     window.setInterval(updatePlaybackPosition, 250);
   }

@@ -102,13 +102,44 @@ const result = await evaluate(
     cueCount: document.getElementById('captionroll-host')?.shadowRoot?.querySelectorAll('.cue').length ?? 0,
     hasRawMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('[data-mode="raw"]')),
     hasFavorites: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.favorites-toggle')),
-    hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export'))
+    hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export')),
+    hasVideoCaptionHost: Boolean(document.getElementById('captionroll-video-caption-host'))
   })`
 );
 console.log(JSON.stringify(result, null, 2));
 if (!result?.hasPanel) process.exitCode = 1;
-if (result?.hasRawMode || !result?.hasFavorites || !result?.hasQuizletExport) process.exitCode = 1;
+if (
+  result?.hasRawMode ||
+  !result?.hasFavorites ||
+  !result?.hasQuizletExport ||
+  !result?.hasVideoCaptionHost
+) {
+  process.exitCode = 1;
+}
 if (result?.cueCount > 0) {
+  await evaluate(
+    target,
+    "document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.cue')?.click()"
+  );
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const videoCaption = await evaluate(
+    target,
+    `(() => {
+      const player = document.getElementById('movie_player');
+      const host = document.getElementById('captionroll-video-caption-host');
+      const caption = host?.shadowRoot?.querySelector('.caption');
+      return {
+        text: caption?.textContent?.trim() ?? '',
+        visible: Boolean(caption && !caption.hidden),
+        nativeCaptionsHidden: player?.classList.contains('captionroll-full-sentence-captions') ?? false
+      };
+    })()`
+  );
+  console.log(JSON.stringify({ videoCaption }, null, 2));
+  if (!videoCaption.visible || !videoCaption.text || !videoCaption.nativeCaptionsHidden) {
+    process.exitCode = 1;
+  }
+
   const favoriteAppearance = await evaluate(
     target,
     `(() => {
