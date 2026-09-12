@@ -1,0 +1,105 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: #18212f;
+  background: #f5f7fb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  width: 360px;
+  margin: 0;
+  background: #f5f7fb;
+}
+
+main { padding: 18px; }
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.logo {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #2f80ed;
+  box-shadow: 0 0 0 6px rgba(47, 128, 237, .14);
+}
+
+h1 { margin: 0; font-size: 19px; line-height: 1.2; }
+.hero p { margin: 3px 0 0; color: #667085; font-size: 12px; }
+h2 { margin: 0 0 9px; color: #667085; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+
+section {
+  overflow: hidden;
+  border: 1px solid #dfe4ec;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(28, 39, 56, .08);
+}
+
+.setting {
+  display: flex;
+  gap: 14px;
+  padding: 13px 14px;
+  border-bottom: 1px solid #edf0f4;
+}
+
+.setting:last-child { border-bottom: 0; }
+.toggle-row { align-items: center; justify-content: space-between; }
+.stacked { flex-direction: column; }
+strong { display: block; font-size: 13px; font-weight: 650; }
+small { display: block; margin-top: 3px; color: #667085; font-size: 11px; line-height: 1.35; }
+
+input[type="checkbox"] {
+  width: 34px;
+  height: 19px;
+  flex: 0 0 auto;
+  accent-color: #2f80ed;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: #eef1f5;
+}
+
+.segmented label { cursor: pointer; }
+.segmented input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented span {
+  display: block;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  color: #667085;
+  font-size: 12px;
+}
+.segmented input:checked + span { color: #fff; background: #2f80ed; }
+
+.range-heading { display: flex; justify-content: space-between; align-items: start; }
+output { color: #2f80ed; font-size: 12px; font-weight: 650; }
+input[type="range"] { width: 100%; accent-color: #2f80ed; }
+
+.saved {
+  margin: 12px 0 0;
+  text-align: center;
+  color: #667085;
+  font-size: 11px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root, body { color: #f1f3f5; background: #15171b; }
+  section { border-color: #343941; background: #202329; box-shadow: none; }
+  .setting { border-color: #30343b; }
+  .hero p, h2, small, .saved { color: #aab2bf; }
+  .segmented { background: #30343b; }
+  .segmented span { color: #c3c9d2; }
+}

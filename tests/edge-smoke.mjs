@@ -100,14 +100,14 @@ const result = await evaluate(
     panelParent: document.getElementById('captionroll-host')?.parentElement?.id ?? null,
     status: document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.status')?.textContent ?? null,
     cueCount: document.getElementById('captionroll-host')?.shadowRoot?.querySelectorAll('.cue').length ?? 0,
-    hasInteractionMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.interaction')),
+    hasRawMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('[data-mode="raw"]')),
     hasFavorites: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.favorites-toggle')),
     hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export'))
   })`
 );
 console.log(JSON.stringify(result, null, 2));
 if (!result?.hasPanel) process.exitCode = 1;
-if (!result?.hasInteractionMode || !result?.hasFavorites || !result?.hasQuizletExport) process.exitCode = 1;
+if (result?.hasRawMode || !result?.hasFavorites || !result?.hasQuizletExport) process.exitCode = 1;
 if (result?.cueCount > 0) {
   const favoriteAppearance = await evaluate(
     target,

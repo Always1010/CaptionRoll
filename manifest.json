@@ -13,7 +13,8 @@
   "permissions": ["storage"],
   "host_permissions": ["https://www.youtube.com/*"],
   "action": {
-    "default_title": "显示或收起 CaptionRoll",
+    "default_title": "打开 CaptionRoll 设置",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon-16.png",
       "32": "icons/icon-32.png",
@@ -34,7 +35,7 @@
     {
       "matches": ["https://www.youtube.com/*"],
       "css": ["content.css"],
-      "js": ["sentence-engine.js", "card-engine.js", "content.js"],
+      "js": ["sentence-engine.js", "card-engine.js", "settings.js", "content.js"],
       "run_at": "document_start"
     }
   ]
