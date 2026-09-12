@@ -101,6 +101,8 @@ const result = await evaluate(
     status: document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.status')?.textContent ?? null,
     cueCount: document.getElementById('captionroll-host')?.shadowRoot?.querySelectorAll('.cue').length ?? 0,
     hasRawMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('[data-mode="raw"]')),
+    hasInteractionMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.interaction')),
+    hasTranscriptFontControls: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.font-controls')),
     hasFavorites: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.favorites-toggle')),
     hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export')),
     hasVideoCaptionHost: Boolean(document.getElementById('captionroll-video-caption-host'))
@@ -110,9 +112,36 @@ console.log(JSON.stringify(result, null, 2));
 if (!result?.hasPanel) process.exitCode = 1;
 if (
   result?.hasRawMode ||
+  !result?.hasInteractionMode ||
+  !result?.hasTranscriptFontControls ||
   !result?.hasFavorites ||
   !result?.hasQuizletExport ||
   !result?.hasVideoCaptionHost
+) {
+  process.exitCode = 1;
+}
+const transcriptControls = await evaluate(
+  target,
+  `(() => {
+    const root = document.getElementById('captionroll-host')?.shadowRoot;
+    const interaction = root?.querySelector('.interaction');
+    const fontUp = root?.querySelector('[data-font="up"]');
+    const host = document.getElementById('captionroll-host');
+    const modeBefore = interaction?.textContent ?? '';
+    const fontBefore = host?.style.getPropertyValue('--cr-font-scale') ?? '';
+    interaction?.click();
+    const modeAfter = interaction?.textContent ?? '';
+    interaction?.click();
+    fontUp?.click();
+    const fontAfter = host?.style.getPropertyValue('--cr-font-scale') ?? '';
+    return { modeBefore, modeAfter, fontBefore, fontAfter };
+  })()`
+);
+console.log(JSON.stringify({ transcriptControls }, null, 2));
+if (
+  !transcriptControls.modeBefore ||
+  transcriptControls.modeBefore === transcriptControls.modeAfter ||
+  Number(transcriptControls.fontAfter) <= Number(transcriptControls.fontBefore)
 ) {
   process.exitCode = 1;
 }

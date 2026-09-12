@@ -3,10 +3,8 @@
 
   const settingsEngine = globalThis.CaptionRollSettings;
   const panelVisible = document.querySelector('[data-setting="captionRollPanelVisible"]');
-  const fontScale = document.querySelector('[data-setting="captionRollFontScale"]');
   const follow = document.querySelector('[data-setting="captionRollFollow"]');
   const expanded = document.querySelector('[data-setting="captionRollExpanded"]');
-  const scaleOutput = document.querySelector('[data-output="captionRollFontScale"]');
   const videoCaptions = document.querySelector('[data-setting="captionRollVideoCaptions"]');
   const captionFontScale = document.querySelector('[data-setting="captionRollCaptionFontScale"]');
   const captionPosition = document.querySelector('[data-setting="captionRollCaptionPosition"]');
@@ -18,10 +16,8 @@
 
   function render(settings) {
     panelVisible.checked = settings.captionRollPanelVisible;
-    fontScale.value = String(settings.captionRollFontScale);
     follow.checked = settings.captionRollFollow;
     expanded.checked = !settings.captionRollCollapsed;
-    scaleOutput.value = `${Math.round(settings.captionRollFontScale * 100)}%`;
     videoCaptions.checked = settings.captionRollVideoCaptions;
     captionFontScale.value = String(settings.captionRollCaptionFontScale);
     captionPosition.value = String(settings.captionRollCaptionPosition);
@@ -53,10 +49,6 @@
   videoCaptions.addEventListener("change", () =>
     save({ captionRollVideoCaptions: videoCaptions.checked })
   );
-  fontScale.addEventListener("input", () => {
-    scaleOutput.value = `${Math.round(Number(fontScale.value) * 100)}%`;
-  });
-  fontScale.addEventListener("change", () => save({ captionRollFontScale: Number(fontScale.value) }));
   captionFontScale.addEventListener("input", () => {
     captionFontOutput.value = `${Math.round(Number(captionFontScale.value) * 100)}%`;
   });
