@@ -47,6 +47,18 @@ const abbreviation = mergeIntoSentences([
 ]);
 assert.deepEqual(abbreviation.map((sentence) => sentence.text), ["I spoke with Dr. Smith yesterday."]);
 
+const initialism = mergeIntoSentences([
+  {
+    startMs: 0,
+    endMs: 3000,
+    text: "The U.S. economy grew. next we will discuss why."
+  }
+]);
+assert.deepEqual(initialism.map((sentence) => sentence.text), [
+  "The U.S. economy grew.",
+  "next we will discuss why."
+]);
+
 const longSpokenSentence = mergeIntoSentences([
   { startMs: 17000, endMs: 22000, text: "[laughter] Um but I thought that actually this whole idea" },
   { startMs: 22000, endMs: 27000, text: "of English names um for English learners or people speaking" },
@@ -66,15 +78,33 @@ assert.deepEqual(
   ]
 );
 
+const possessiveBoundarySentence =
+  "The reason why I kind of immediately feel like no, you do not need an English name is because I think [laughter] most people would prefer like most English I don't know if most English speak people, but at least the people I have spoken to about this, English native speakers I have spoken to about this, they would rather try and say your";
+const possessiveBoundary = mergeIntoSentences([
+  { startMs: 438000, endMs: 463000, text: possessiveBoundarySentence },
+  {
+    startMs: 463000,
+    endMs: 470000,
+    text: "real name. um as opposed to using your English name because they think it is more respectful."
+  }
+]);
+assert.deepEqual(
+  possessiveBoundary.map((sentence) => sentence.text),
+  [
+    `${possessiveBoundarySentence} real name.`,
+    "um as opposed to using your English name because they think it is more respectful."
+  ]
+);
+
 const longUnpunctuatedLead = Array.from({ length: 63 }, (_, index) => `word${index}`).join(" ");
 const safeFallback = mergeIntoSentences([
   { startMs: 0, endMs: 31000, text: `${longUnpunctuatedLead} the` },
-  { startMs: 30000, endMs: 33000, text: "question appears" },
-  { startMs: 33000, endMs: 35000, text: "Another topic follows." }
+  { startMs: 30000, endMs: 33000, text: "question appears," },
+  { startMs: 33000, endMs: 35000, text: "another topic follows" }
 ]);
 assert.deepEqual(
   safeFallback.map((sentence) => sentence.text),
-  [`${longUnpunctuatedLead} the question appears`, "Another topic follows."]
+  [`${longUnpunctuatedLead} the question appears,`, "another topic follows"]
 );
 
 console.log("sentence-engine: all tests passed");
