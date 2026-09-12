@@ -80,11 +80,15 @@ const result = await evaluate(
     hasPanel: Boolean(document.getElementById('captionroll-host')),
     panelParent: document.getElementById('captionroll-host')?.parentElement?.id ?? null,
     status: document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.status')?.textContent ?? null,
-    cueCount: document.getElementById('captionroll-host')?.shadowRoot?.querySelectorAll('.cue').length ?? 0
+    cueCount: document.getElementById('captionroll-host')?.shadowRoot?.querySelectorAll('.cue').length ?? 0,
+    hasInteractionMode: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.interaction')),
+    hasFavorites: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.favorites-toggle')),
+    hasQuizletExport: Boolean(document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.quizlet-export'))
   })`
 );
 console.log(JSON.stringify(result, null, 2));
 if (!result?.hasPanel) process.exitCode = 1;
+if (!result?.hasInteractionMode || !result?.hasFavorites || !result?.hasQuizletExport) process.exitCode = 1;
 if (screenshotPath) {
   const base64 = await captureScreenshot(target);
   await writeFile(screenshotPath, Buffer.from(base64, "base64"));

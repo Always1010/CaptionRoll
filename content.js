@@ -34,8 +34,11 @@
   let favoritesElement = null;
   let favoriteCountElement = null;
   let selectAllElement = null;
+  let exportStatusElement = null;
   let videoElement = null;
   let observer = null;
+  let translatorSession = null;
+  let translating = false;
 
   const template = `
     <style>
@@ -113,12 +116,21 @@
         border-bottom:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); }
       .favorite-card input { margin-top:4px; }
       .favorite-english { font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+      .favorite-chinese { width:100%; min-height:54px; margin-top:8px; resize:vertical; border:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.14));
+        border-radius:8px; padding:8px 9px; color:inherit; background:var(--yt-spec-base-background, #fff); font:inherit; font-size:13px; line-height:1.45; }
+      .favorite-chinese:focus { outline:2px solid var(--cr-accent-soft); border-color:var(--cr-accent); }
       .favorite-source { margin-top:5px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
       .favorite-remove { width:30px; height:30px; border:0; border-radius:50%; color:var(--yt-spec-text-secondary, #606060);
         background:transparent; cursor:pointer; }
       .favorite-remove:hover { color:#c62828; background:rgba(198,40,40,.1); }
       .favorites-footer { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px;
         border-top:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); color:var(--yt-spec-text-secondary, #606060); font-size:11px; }
+      .export-summary { min-width:0; flex:1; }
+      .export-status { margin-top:3px; white-space:normal; line-height:1.35; }
+      .export-status.error { color:#c62828; }
+      .primary-button { border:0; border-radius:999px; padding:9px 14px; color:#fff; background:var(--cr-accent);
+        cursor:pointer; font-size:12px; font-weight:600; white-space:nowrap; }
+      .primary-button:disabled, .secondary-button:disabled { opacity:.55; cursor:default; }
       @media (prefers-color-scheme: dark) {
         .panel { background: var(--yt-spec-base-background, #0f0f0f); color:var(--yt-spec-text-primary, #f1f1f1); }
       }
@@ -154,12 +166,16 @@
         <div class="favorites-toolbar">
           <label class="check-all"><input class="select-all" type="checkbox"> 全选</label>
           <div class="spacer"></div>
+          <button type="button" class="secondary-button translate-selected">生成中文</button>
           <button type="button" class="secondary-button remove-selected">删除所选</button>
         </div>
         <div class="favorites-list"><div class="empty">还没有收藏句子。</div></div>
         <div class="favorites-footer">
-          <span class="favorites-meta">0 条收藏</span>
-          <span>仅保存在本机</span>
+          <div class="export-summary">
+            <div class="favorites-meta">0 条收藏</div>
+            <div class="export-status">中文与英文仅保存在本机</div>
+          </div>
+          <button type="button" class="primary-button quizlet-export">复制并打开 Quizlet</button>
         </div>
       </section>
     </section>
@@ -209,6 +225,7 @@
     favoritesElement = shadow.querySelector(".favorites-list");
     favoriteCountElement = shadow.querySelector(".favorite-count");
     selectAllElement = shadow.querySelector(".select-all");
+    exportStatusElement = shadow.querySelector(".export-status");
     const interactionButton = shadow.querySelector(".interaction");
 
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
@@ -227,17 +244,23 @@
       renderFavorites();
     });
     shadow.querySelector(".remove-selected").addEventListener("click", removeSelectedFavorites);
+    shadow.querySelector(".translate-selected").addEventListener("click", translateSelectedFavorites);
+    shadow.querySelector(".quizlet-export").addEventListener("click", exportToQuizlet);
     favoritesElement.addEventListener("change", (event) => {
       const checkbox = event.target.closest("[data-select-favorite]");
-      if (!checkbox) return;
-      if (checkbox.checked) state.selectedFavoriteIds.add(checkbox.dataset.selectFavorite);
-      else state.selectedFavoriteIds.delete(checkbox.dataset.selectFavorite);
-      updateFavoriteSelectionSummary();
+      if (checkbox) {
+        if (checkbox.checked) state.selectedFavoriteIds.add(checkbox.dataset.selectFavorite);
+        else state.selectedFavoriteIds.delete(checkbox.dataset.selectFavorite);
+        updateFavoriteSelectionSummary();
+        return;
+      }
+      const chineseInput = event.target.closest("[data-chinese-id]");
+      if (chineseInput) updateFavoriteChinese(chineseInput.dataset.chineseId, chineseInput.value);
     });
     favoritesElement.addEventListener("click", (event) => {
       const removeButton = event.target.closest("[data-remove-favorite]");
       if (!removeButton) return;
-      removeFavorite(removeButton.dataset.removeFavorite);
+      removeFavorite(removeButton.dataset.removeFavorite, true);
     });
     followButton.addEventListener("click", () => setFollow(!state.follow, true));
     resumeButton.addEventListener("click", () => setFollow(true, true));
@@ -318,6 +341,10 @@
     interactionButton.classList.toggle("select", selecting);
     interactionButton.setAttribute("aria-pressed", String(selecting));
     listElement?.classList.toggle("select-mode", selecting);
+    listElement?.querySelectorAll(".cue").forEach((row) => {
+      row.title = selecting ? "拖动选择文字" : "点击跳转到此处";
+      row.setAttribute("role", selecting ? "group" : "button");
+    });
     const favoritesOpen = state.view === "favorites";
     shadow.querySelector(".panel").classList.toggle("favorites-open", favoritesOpen);
     const favoritesView = shadow.querySelector(".favorites-view");
@@ -402,7 +429,8 @@
     renderFavorites();
   }
 
-  function removeFavorite(id) {
+  function removeFavorite(id, requireConfirmation = false) {
+    if (requireConfirmation && !window.confirm("确定删除这条收藏吗？")) return;
     const next = state.favorites.filter((favorite) => favorite.id !== id);
     if (next.length === state.favorites.length) return;
     state.favorites = next;
@@ -414,6 +442,7 @@
 
   function removeSelectedFavorites() {
     if (!state.selectedFavoriteIds.size) return;
+    if (!window.confirm(`确定删除所选的 ${state.selectedFavoriteIds.size} 条收藏吗？`)) return;
     state.favorites = state.favorites.filter((favorite) => !state.selectedFavoriteIds.has(favorite.id));
     state.selectedFavoriteIds.clear();
     saveFavorites();
@@ -427,6 +456,16 @@
     selectAllElement.checked = Boolean(state.favorites.length) && selectedCount === state.favorites.length;
     selectAllElement.indeterminate = selectedCount > 0 && selectedCount < state.favorites.length;
     shadow.querySelector(".favorites-meta").textContent = `${state.favorites.length} 条收藏 · 已选 ${selectedCount} 条`;
+    shadow.querySelector(".translate-selected").disabled = selectedCount === 0 || translating;
+    shadow.querySelector(".quizlet-export").disabled = selectedCount === 0 || translating;
+  }
+
+  function updateFavoriteChinese(id, value) {
+    const favorite = state.favorites.find((entry) => entry.id === id);
+    if (!favorite) return;
+    favorite.chinese = cardEngine.normalizeCardText(value);
+    saveFavorites();
+    setExportStatus("中文已保存在本机");
   }
 
   function renderFavorites() {
@@ -459,7 +498,13 @@
       const source = document.createElement("div");
       source.className = "favorite-source";
       source.textContent = `${formatTime(favorite.startMs)}${favorite.sourceTitle ? ` · ${favorite.sourceTitle}` : ""}`;
-      body.append(english, source);
+      const chinese = document.createElement("textarea");
+      chinese.className = "favorite-chinese";
+      chinese.dataset.chineseId = favorite.id;
+      chinese.value = favorite.chinese;
+      chinese.placeholder = "中文提示：可手动填写，或选中后生成中文";
+      chinese.setAttribute("aria-label", `中文提示：${favorite.english}`);
+      body.append(english, chinese, source);
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "favorite-remove";
@@ -472,6 +517,114 @@
     }
     favoritesElement.append(fragment);
     updateFavoriteSelectionSummary();
+  }
+
+  function selectedFavorites() {
+    return state.favorites.filter((favorite) => state.selectedFavoriteIds.has(favorite.id));
+  }
+
+  function setExportStatus(message, isError = false) {
+    if (!exportStatusElement) return;
+    exportStatusElement.textContent = message;
+    exportStatusElement.classList.toggle("error", isError);
+  }
+
+  function persistVisibleChineseEdits() {
+    favoritesElement?.querySelectorAll("[data-chinese-id]").forEach((input) => {
+      const favorite = state.favorites.find((entry) => entry.id === input.dataset.chineseId);
+      if (favorite) favorite.chinese = cardEngine.normalizeCardText(input.value);
+    });
+    saveFavorites();
+  }
+
+  async function getTranslatorSession() {
+    if (translatorSession) return translatorSession;
+    if (!("Translator" in globalThis)) {
+      throw new Error("当前 Edge 版本不支持本地 Translator API，请手动填写中文。");
+    }
+    const creation = globalThis.Translator.create({
+      sourceLanguage: "en",
+      targetLanguage: "zh",
+      monitor(monitor) {
+        monitor.addEventListener("downloadprogress", (event) => {
+          const progress = Math.round((event.loaded / Math.max(event.total || 1, 1)) * 100);
+          setExportStatus(`首次使用正在下载本地翻译模型：${progress}%`);
+        });
+      }
+    });
+    translatorSession = await creation;
+    return translatorSession;
+  }
+
+  async function translateSelectedFavorites() {
+    if (translating) return;
+    persistVisibleChineseEdits();
+    const targets = selectedFavorites().filter((favorite) => !favorite.chinese);
+    if (!targets.length) {
+      setExportStatus("所选卡片已经有中文；如需修改，可以直接编辑。");
+      return;
+    }
+
+    translating = true;
+    updateFavoriteSelectionSummary();
+    setExportStatus("正在准备本地翻译…");
+    try {
+      const translator = await getTranslatorSession();
+      for (let index = 0; index < targets.length; index += 1) {
+        setExportStatus(`正在生成中文 ${index + 1}/${targets.length}…`);
+        targets[index].chinese = cardEngine.normalizeCardText(await translator.translate(targets[index].english));
+      }
+      saveFavorites();
+      setExportStatus(`已为 ${targets.length} 张卡片生成中文，请检查后再导入。`);
+    } catch (error) {
+      translatorSession?.destroy?.();
+      translatorSession = null;
+      setExportStatus(error?.message || "本地翻译失败，请手动填写中文。", true);
+    } finally {
+      translating = false;
+      renderFavorites();
+    }
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch (_) {}
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) throw new Error("无法写入剪贴板，请检查浏览器的剪贴板权限。");
+  }
+
+  async function exportToQuizlet() {
+    persistVisibleChineseEdits();
+    const chosen = selectedFavorites();
+    const missingChinese = chosen.filter((favorite) => !favorite.chinese).length;
+    if (!chosen.length) {
+      setExportStatus("请先选择至少一张卡片。", true);
+      return;
+    }
+    if (missingChinese) {
+      setExportStatus(`还有 ${missingChinese} 张卡片缺少中文，请先生成或手动填写。`, true);
+      return;
+    }
+
+    const importText = cardEngine.buildQuizletImport(chosen);
+    try {
+      await copyText(importText);
+      setExportStatus(`已复制 ${chosen.length} 张卡片，正在打开 Quizlet…`);
+      await chrome.runtime.sendMessage({ type: "CAPTIONROLL/OPEN_QUIZLET" });
+    } catch (error) {
+      setExportStatus(error?.message || "复制失败，请重试。", true);
+    }
   }
 
   function setFollow(value, scrollNow = false) {
