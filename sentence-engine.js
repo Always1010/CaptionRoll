@@ -79,7 +79,9 @@
   function endsSentence(text) {
     const trimmed = normalizeText(text);
     if (!/[.!?]["'’”\])}]*$/.test(trimmed)) return false;
-    return !/(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e)\.["'’”\])}]*$/i.test(trimmed);
+    return !/(?:^|[^\p{L}\p{N}_])(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e)\.["'’”\])}]*$/iu.test(
+      trimmed
+    );
   }
 
   function joinText(left, right) {
@@ -89,11 +91,79 @@
     return `${left} ${right}`;
   }
 
+  const WEAK_END_WORDS = new Set([
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "be",
+    "because",
+    "but",
+    "by",
+    "for",
+    "from",
+    "if",
+    "in",
+    "of",
+    "on",
+    "or",
+    "so",
+    "than",
+    "that",
+    "the",
+    "then",
+    "to",
+    "when",
+    "which",
+    "while",
+    "who",
+    "with"
+  ]);
+
+  const WEAK_START_WORDS = new Set([
+    "and",
+    "as",
+    "because",
+    "but",
+    "for",
+    "of",
+    "or",
+    "than",
+    "that",
+    "then",
+    "to",
+    "uh",
+    "um",
+    "which",
+    "who"
+  ]);
+
+  function edgeWord(text, fromEnd = false) {
+    const tokens = words(text).map(normalizedWord).filter(Boolean);
+    return fromEnd ? tokens.at(-1) ?? "" : tokens[0] ?? "";
+  }
+
+  function isNaturalBoundary(left, right) {
+    const last = edgeWord(left, true);
+    const first = edgeWord(right);
+    return Boolean(last && first && !WEAK_END_WORDS.has(last) && !WEAK_START_WORDS.has(first));
+  }
+
+  function startsLikeNewSentence(text) {
+    return /^["'’“([{]*[A-Z]/.test(normalizeText(text));
+  }
+
   function mergeIntoSentences(rawCues, options = {}) {
     const cues = prepareCues(rawCues);
-    const pauseMs = options.pauseMs ?? 950;
-    const maxWords = options.maxWords ?? 34;
-    const maxDurationMs = options.maxDurationMs ?? 15000;
+    const pauseMs = options.pauseMs ?? 1200;
+    const softMaxWords = options.maxWords ?? 34;
+    const softMaxDurationMs = options.maxDurationMs ?? 15000;
+    const hardMaxWords = options.hardMaxWords ?? Math.max(64, softMaxWords + 20);
+    const hardMaxDurationMs = options.hardMaxDurationMs ?? Math.max(30000, softMaxDurationMs + 10000);
+    const emergencyMaxWords = options.emergencyMaxWords ?? Math.max(96, hardMaxWords + 24);
+    const emergencyMaxDurationMs =
+      options.emergencyMaxDurationMs ?? Math.max(45000, hardMaxDurationMs + 10000);
     const fragments = cues.flatMap(splitCue);
     const sentences = [];
     let current = null;
@@ -116,10 +186,29 @@
       }
 
       const wordCount = words(current.text).length;
+      const durationMs = current.endMs - current.startMs;
       const longEnoughForPause = wordCount >= 4;
-      const hasLongPause = next && next.startMs - fragment.endMs >= pauseMs && longEnoughForPause;
-      const tooLong = wordCount >= maxWords || current.endMs - current.startMs >= maxDurationMs;
-      if (endsSentence(fragment.text) || hasLongPause || tooLong || !next) flush();
+      const pauseDurationMs = next ? next.startMs - fragment.endMs : 0;
+      const softLimitReached = wordCount >= softMaxWords || durationMs >= softMaxDurationMs;
+      const naturalBoundary = next && isNaturalBoundary(current.text, next.text);
+      const hasLongPause =
+        naturalBoundary &&
+        longEnoughForPause &&
+        pauseDurationMs >= pauseMs &&
+        (startsLikeNewSentence(next.text) || (softLimitReached && pauseDurationMs >= pauseMs * 1.5));
+      const hardLimitReached = wordCount >= hardMaxWords || durationMs >= hardMaxDurationMs;
+      const emergencyLimitReached =
+        wordCount >= emergencyMaxWords || durationMs >= emergencyMaxDurationMs;
+      const hasSafeHardLimit = hardLimitReached && naturalBoundary;
+      if (
+        endsSentence(fragment.text) ||
+        hasLongPause ||
+        hasSafeHardLimit ||
+        emergencyLimitReached ||
+        !next
+      ) {
+        flush();
+      }
     }
     return sentences;
   }
