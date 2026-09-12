@@ -55,13 +55,42 @@
     return result;
   }
 
-  function splitCue(cue) {
-    let segments = [cue.text];
+  function splitExplicitSentenceEnds(text) {
+    const normalized = normalizeText(text);
+    const segments = [];
+    const boundaryPattern = /[.!?]["'’”\])}]*(?=\s+|$)/g;
+    let segmentStart = 0;
+    let match;
+
+    while ((match = boundaryPattern.exec(normalized))) {
+      const segmentEnd = match.index + match[0].length;
+      const candidate = normalizeText(normalized.slice(segmentStart, segmentEnd));
+      if (!endsSentence(candidate)) continue;
+      const followingText = normalizeText(normalized.slice(segmentEnd));
+      const endsWithInitial =
+        /(?:^|[^\p{L}\p{N}_])(?:\p{Lu}\.)+["'’”\])}]*$/u.test(candidate);
+      if (followingText && endsWithInitial) continue;
+      segments.push(candidate);
+      segmentStart = segmentEnd;
+    }
+
+    const remainder = normalizeText(normalized.slice(segmentStart));
+    if (remainder) segments.push(remainder);
+    return segments;
+  }
+
+  function splitTextAtSentenceEnds(text) {
+    let coarseSegments = [normalizeText(text)];
     try {
-      segments = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(cue.text)]
+      coarseSegments = [...new Intl.Segmenter("en", { granularity: "sentence" }).segment(text)]
         .map((entry) => normalizeText(entry.segment))
         .filter(Boolean);
     } catch (_) {}
+    return coarseSegments.flatMap(splitExplicitSentenceEnds);
+  }
+
+  function splitCue(cue) {
+    const segments = splitTextAtSentenceEnds(cue.text);
 
     if (segments.length <= 1) return [cue];
     const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
@@ -103,8 +132,13 @@
     "by",
     "for",
     "from",
+    "her",
+    "his",
     "if",
     "in",
+    "its",
+    "my",
+    "our",
     "of",
     "on",
     "or",
@@ -112,8 +146,12 @@
     "than",
     "that",
     "the",
+    "their",
     "then",
+    "this",
+    "those",
     "to",
+    "your",
     "when",
     "which",
     "while",
@@ -154,6 +192,10 @@
     return /^["'’“([{]*[A-Z]/.test(normalizeText(text));
   }
 
+  function endsClause(text) {
+    return /[,;:—–]["'’”\])}]*$/.test(normalizeText(text));
+  }
+
   function mergeIntoSentences(rawCues, options = {}) {
     const cues = prepareCues(rawCues);
     const pauseMs = options.pauseMs ?? 1200;
@@ -164,7 +206,19 @@
     const emergencyMaxWords = options.emergencyMaxWords ?? Math.max(96, hardMaxWords + 24);
     const emergencyMaxDurationMs =
       options.emergencyMaxDurationMs ?? Math.max(45000, hardMaxDurationMs + 10000);
+    const absoluteMaxWords = options.absoluteMaxWords ?? Math.max(140, emergencyMaxWords + 32);
+    const absoluteMaxDurationMs =
+      options.absoluteMaxDurationMs ?? Math.max(60000, emergencyMaxDurationMs + 10000);
     const fragments = cues.flatMap(splitCue);
+    const remainingWordCounts = new Array(fragments.length + 1).fill(0);
+    const nextSentenceEndIndexes = new Array(fragments.length).fill(-1);
+    let nextSentenceEndIndex = -1;
+    for (let index = fragments.length - 1; index >= 0; index -= 1) {
+      if (endsSentence(fragments[index].text)) nextSentenceEndIndex = index;
+      nextSentenceEndIndexes[index] = nextSentenceEndIndex;
+      remainingWordCounts[index] =
+        words(fragments[index].text).length + remainingWordCounts[index + 1];
+    }
     const sentences = [];
     let current = null;
 
@@ -191,7 +245,22 @@
       const pauseDurationMs = next ? next.startMs - fragment.endMs : 0;
       const softLimitReached = wordCount >= softMaxWords || durationMs >= softMaxDurationMs;
       const naturalBoundary = next && isNaturalBoundary(current.text, next.text);
+      const upcomingSentenceEndIndex = nextSentenceEndIndexes[index];
+      const wordsThroughSentenceEnd =
+        upcomingSentenceEndIndex > index
+          ? wordCount +
+            remainingWordCounts[index + 1] -
+            remainingWordCounts[upcomingSentenceEndIndex + 1]
+          : Infinity;
+      const durationThroughSentenceEnd =
+        upcomingSentenceEndIndex > index
+          ? Math.max(current.endMs, fragments[upcomingSentenceEndIndex].endMs) - current.startMs
+          : Infinity;
+      const canReachSentenceEnd =
+        wordsThroughSentenceEnd <= absoluteMaxWords &&
+        durationThroughSentenceEnd <= absoluteMaxDurationMs;
       const hasLongPause =
+        !canReachSentenceEnd &&
         naturalBoundary &&
         longEnoughForPause &&
         pauseDurationMs >= pauseMs &&
@@ -199,12 +268,21 @@
       const hardLimitReached = wordCount >= hardMaxWords || durationMs >= hardMaxDurationMs;
       const emergencyLimitReached =
         wordCount >= emergencyMaxWords || durationMs >= emergencyMaxDurationMs;
-      const hasSafeHardLimit = hardLimitReached && naturalBoundary;
+      const absoluteLimitReached =
+        wordCount >= absoluteMaxWords || durationMs >= absoluteMaxDurationMs;
+      const hasSafeHardLimit =
+        !canReachSentenceEnd &&
+        hardLimitReached &&
+        naturalBoundary &&
+        (endsClause(fragment.text) || pauseDurationMs >= pauseMs * 1.5);
+      const hasSafeEmergencyLimit =
+        !canReachSentenceEnd && emergencyLimitReached && naturalBoundary;
       if (
         endsSentence(fragment.text) ||
         hasLongPause ||
         hasSafeHardLimit ||
-        emergencyLimitReached ||
+        hasSafeEmergencyLimit ||
+        absoluteLimitReached ||
         !next
       ) {
         flush();
