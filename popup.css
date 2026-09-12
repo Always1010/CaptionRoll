@@ -9,7 +9,9 @@
 
 body {
   width: 360px;
+  max-height: 580px;
   margin: 0;
+  overflow-y: auto;
   background: #f5f7fb;
 }
 
@@ -42,6 +44,8 @@ section {
   background: #fff;
   box-shadow: 0 8px 24px rgba(28, 39, 56, .08);
 }
+
+section + section { margin-top: 14px; }
 
 .setting {
   display: flex;

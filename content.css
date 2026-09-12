@@ -12,6 +12,18 @@
   display: none !important;
 }
 
+#movie_player > #captionroll-video-caption-host {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 50 !important;
+  display: block !important;
+  pointer-events: none !important;
+}
+
+#movie_player.captionroll-full-sentence-captions .ytp-caption-window-container {
+  display: none !important;
+}
+
 #secondary.captionroll-secondary {
   box-sizing: border-box;
 }

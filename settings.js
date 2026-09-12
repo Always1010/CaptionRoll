@@ -6,7 +6,11 @@
     captionRollInteractionMode: "seek",
     captionRollFontScale: 1,
     captionRollFollow: true,
-    captionRollCollapsed: false
+    captionRollCollapsed: false,
+    captionRollVideoCaptions: true,
+    captionRollCaptionFontScale: 1,
+    captionRollCaptionPosition: 12,
+    captionRollCaptionBackground: 0.7
   });
 
   function clampNumber(value, minimum, maximum, fallback) {
@@ -29,7 +33,37 @@
       captionRollCollapsed:
         input.captionRollCollapsed === undefined
           ? defaults.captionRollCollapsed
-          : Boolean(input.captionRollCollapsed)
+          : Boolean(input.captionRollCollapsed),
+      captionRollVideoCaptions:
+        input.captionRollVideoCaptions === undefined
+          ? defaults.captionRollVideoCaptions
+          : Boolean(input.captionRollVideoCaptions),
+      captionRollCaptionFontScale:
+        Math.round(
+          clampNumber(
+            input.captionRollCaptionFontScale,
+            0.8,
+            1.6,
+            defaults.captionRollCaptionFontScale
+          ) * 10
+        ) / 10,
+      captionRollCaptionPosition: Math.round(
+        clampNumber(
+          input.captionRollCaptionPosition,
+          4,
+          24,
+          defaults.captionRollCaptionPosition
+        )
+      ),
+      captionRollCaptionBackground:
+        Math.round(
+          clampNumber(
+            input.captionRollCaptionBackground,
+            0,
+            0.9,
+            defaults.captionRollCaptionBackground
+          ) * 10
+        ) / 10
     };
   }
 
