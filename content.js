@@ -10,6 +10,7 @@
     rawCues: [],
     sentences: [],
     mode: "sentences",
+    interactionMode: "seek",
     follow: true,
     collapsed: false,
     fontScale: 1,
@@ -60,6 +61,9 @@
       .segments { display:flex; gap:2px; padding:3px; border-radius:10px; background: var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); }
       .segments button, .follow { border:0; border-radius:8px; padding:7px 10px; color:inherit; background:transparent; cursor:pointer; font-size:12px; }
       .segments button.active { color:#fff; background:var(--cr-accent); }
+      .interaction { border:0; border-radius:8px; padding:7px 10px; color:var(--yt-spec-text-secondary, #606060);
+        background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.08)); cursor:pointer; font-size:12px; white-space:nowrap; }
+      .interaction.select { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .spacer { flex:1; }
       .follow { display:flex; align-items:center; gap:5px; color:var(--yt-spec-text-secondary, #606060); }
       .follow.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
@@ -73,6 +77,7 @@
         border-left:3px solid transparent; border-radius:10px; color:inherit; background:transparent; text-align:left; cursor:pointer; }
       .cue:hover { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.07)); }
       .cue.current { border-left-color:var(--cr-accent); background:var(--cr-accent-soft); }
+      .list.select-mode .cue { cursor:text; user-select:text; }
       .time { padding-top:2px; color:var(--yt-spec-text-secondary, #606060); font-size:11px; font-variant-numeric: tabular-nums; }
       .text { font-size: calc(16px * var(--cr-font-scale, 1)); line-height:1.55; overflow-wrap:anywhere; }
       .cue.current .text { font-weight:600; }
@@ -98,6 +103,7 @@
           <button type="button" data-mode="sentences" class="active">完整句子</button>
           <button type="button" data-mode="raw">原始分段</button>
         </div>
+        <button type="button" class="interaction" title="切换为可选择文字">跳转模式</button>
         <div class="spacer"></div>
         <button type="button" class="follow active" title="自动跟随播放">● 跟随</button>
         <div class="font-controls" aria-label="字号">
@@ -154,6 +160,7 @@
     metaElement = shadow.querySelector(".meta");
     resumeButton = shadow.querySelector(".resume");
     followButton = shadow.querySelector(".follow");
+    const interactionButton = shadow.querySelector(".interaction");
 
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
     shadow.querySelectorAll("[data-mode]").forEach((button) => {
@@ -162,6 +169,7 @@
     shadow.querySelectorAll("[data-font]").forEach((button) => {
       button.addEventListener("click", () => changeFont(button.dataset.font === "up" ? 0.1 : -0.1));
     });
+    interactionButton.addEventListener("click", toggleInteractionMode);
     followButton.addEventListener("click", () => setFollow(!state.follow, true));
     resumeButton.addEventListener("click", () => setFollow(true, true));
     listElement.addEventListener("wheel", () => setFollow(false), { passive: true });
@@ -174,7 +182,7 @@
     });
     listElement.addEventListener("click", (event) => {
       const row = event.target.closest(".cue");
-      if (!row) return;
+      if (!row || state.interactionMode !== "seek") return;
       const item = currentItems()[Number(row.dataset.index)];
       const video = getVideo();
       if (item && video) {
@@ -188,10 +196,12 @@
     try {
       const saved = await chrome.storage.local.get({
         captionRollMode: "sentences",
+        captionRollInteractionMode: "seek",
         captionRollFontScale: 1,
         captionRollCollapsed: false
       });
       state.mode = saved.captionRollMode === "raw" ? "raw" : "sentences";
+      state.interactionMode = saved.captionRollInteractionMode === "select" ? "select" : "seek";
       state.fontScale = Math.min(1.4, Math.max(0.8, Number(saved.captionRollFontScale) || 1));
       state.collapsed = Boolean(saved.captionRollCollapsed);
       applyPreferences();
@@ -203,6 +213,7 @@
     chrome.storage.local
       .set({
         captionRollMode: state.mode,
+        captionRollInteractionMode: state.interactionMode,
         captionRollFontScale: state.fontScale,
         captionRollCollapsed: state.collapsed
       })
@@ -218,6 +229,13 @@
     shadow.querySelectorAll("[data-mode]").forEach((button) => {
       button.classList.toggle("active", button.dataset.mode === state.mode);
     });
+    const interactionButton = shadow.querySelector(".interaction");
+    const selecting = state.interactionMode === "select";
+    interactionButton.textContent = selecting ? "选字模式" : "跳转模式";
+    interactionButton.title = selecting ? "切换为点击字幕跳转" : "切换为可选择文字";
+    interactionButton.classList.toggle("select", selecting);
+    interactionButton.setAttribute("aria-pressed", String(selecting));
+    listElement?.classList.toggle("select-mode", selecting);
     shadow.host.style.setProperty("--cr-font-scale", String(state.fontScale));
   }
 
@@ -240,6 +258,12 @@
 
   function changeFont(delta) {
     state.fontScale = Math.min(1.4, Math.max(0.8, Math.round((state.fontScale + delta) * 10) / 10));
+    applyPreferences();
+    savePreferences();
+  }
+
+  function toggleInteractionMode() {
+    state.interactionMode = state.interactionMode === "seek" ? "select" : "seek";
     applyPreferences();
     savePreferences();
   }
@@ -288,6 +312,7 @@
       row.type = "button";
       row.className = "cue";
       row.dataset.index = String(index);
+      row.title = state.interactionMode === "seek" ? "点击跳转到此处" : "拖动选择文字";
       const time = document.createElement("span");
       time.className = "time";
       time.textContent = formatTime(item.startMs);
