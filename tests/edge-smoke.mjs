@@ -42,6 +42,39 @@ function evaluate(target, expression) {
   });
 }
 
+function readVideoCaptionState(target) {
+  return evaluate(
+    target,
+    `(() => {
+      const player = document.getElementById('movie_player');
+      const button = player?.querySelector('.ytp-subtitles-button');
+      const host = document.getElementById('captionroll-video-caption-host');
+      const caption = host?.shadowRoot?.querySelector('.caption');
+      const shell = host?.shadowRoot?.querySelector('.caption-shell');
+      return {
+        ccButtonFound: Boolean(button),
+        ccPressed: button?.getAttribute('aria-pressed') ?? null,
+        text: caption?.textContent?.trim() ?? '',
+        visible: Boolean(shell && !shell.hidden),
+        nativeCaptionsHidden: player?.classList.contains('captionroll-full-sentence-captions') ?? false
+      };
+    })()`
+  );
+}
+
+async function setYoutubeCaptions(target, enabled) {
+  const before = await readVideoCaptionState(target);
+  if (!before.ccButtonFound) return before;
+  if ((before.ccPressed === "true") !== enabled) {
+    await evaluate(
+      target,
+      "document.querySelector('#movie_player .ytp-subtitles-button')?.click()"
+    );
+  }
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  return readVideoCaptionState(target);
+}
+
 function moveMouse(target, x, y) {
   return new Promise((resolve, reject) => {
     const socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -182,25 +215,31 @@ if (
 if (result?.cueCount > 0) {
   await evaluate(
     target,
-    "document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.cue')?.click()"
-  );
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  const videoCaption = await evaluate(
-    target,
     `(() => {
-      const player = document.getElementById('movie_player');
-      const host = document.getElementById('captionroll-video-caption-host');
-      const caption = host?.shadowRoot?.querySelector('.caption');
-      const shell = host?.shadowRoot?.querySelector('.caption-shell');
-      return {
-        text: caption?.textContent?.trim() ?? '',
-        visible: Boolean(shell && !shell.hidden),
-        nativeCaptionsHidden: player?.classList.contains('captionroll-full-sentence-captions') ?? false
-      };
+      document.getElementById('captionroll-host')?.shadowRoot?.querySelector('.cue')?.click();
+      document.querySelector('video')?.pause();
     })()`
   );
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  const captionsOff = await setYoutubeCaptions(target, false);
+  console.log(JSON.stringify({ captionsOff }, null, 2));
+  if (
+    !captionsOff.ccButtonFound ||
+    captionsOff.ccPressed !== 'false' ||
+    captionsOff.visible ||
+    captionsOff.nativeCaptionsHidden
+  ) {
+    process.exitCode = 1;
+  }
+
+  const videoCaption = await setYoutubeCaptions(target, true);
   console.log(JSON.stringify({ videoCaption }, null, 2));
-  if (!videoCaption.visible || !videoCaption.text || !videoCaption.nativeCaptionsHidden) {
+  if (
+    videoCaption.ccPressed !== 'true' ||
+    !videoCaption.visible ||
+    !videoCaption.text ||
+    !videoCaption.nativeCaptionsHidden
+  ) {
     process.exitCode = 1;
   }
 
@@ -342,6 +381,16 @@ if (result?.cueCount > 0) {
   );
   console.log(JSON.stringify({ favoriteAppearance }, null, 2));
   if (!favoriteAppearance.inputFound || favoriteAppearance.contrastRatio < 4.5) process.exitCode = 1;
+
+  const captionsOffAgain = await setYoutubeCaptions(target, false);
+  console.log(JSON.stringify({ captionsOffAgain }, null, 2));
+  if (
+    captionsOffAgain.ccPressed !== 'false' ||
+    captionsOffAgain.visible ||
+    captionsOffAgain.nativeCaptionsHidden
+  ) {
+    process.exitCode = 1;
+  }
 }
 if (screenshotPath) {
   const base64 = await captureScreenshot(target);

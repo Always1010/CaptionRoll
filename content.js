@@ -515,6 +515,22 @@
     applyVideoCaptionPreferences();
   }
 
+  function youtubeCaptionsAreEnabled() {
+    const player = document.getElementById("movie_player");
+    const button = player?.querySelector(".ytp-subtitles-button");
+    const pressed = button?.getAttribute("aria-pressed");
+    if (pressed === "true" || pressed === "false") return pressed === "true";
+    return Boolean(player?.querySelector(".ytp-caption-window-container .captions-text"));
+  }
+
+  function syncNativeCaptionReplacement() {
+    const player = document.getElementById("movie_player");
+    const replaceNativeCaptions =
+      state.videoCaptions && state.sentences.length > 0 && youtubeCaptionsAreEnabled();
+    player?.classList.toggle("captionroll-full-sentence-captions", replaceNativeCaptions);
+    return replaceNativeCaptions;
+  }
+
   function applyVideoCaptionPreferences() {
     if (!videoCaptionHost || !videoCaptionShadow) return;
     videoCaptionHost.style.setProperty(
@@ -525,10 +541,8 @@
     videoCaptionHost.style.setProperty("--cr-caption-background", String(state.captionBackground));
     videoCaptionShadow.querySelector("[data-caption-position]").value = String(state.captionPosition);
     videoCaptionShadow.querySelector("[data-caption-background]").value = String(state.captionBackground);
-    const player = document.getElementById("movie_player");
-    const replaceNativeCaptions = state.videoCaptions && state.sentences.length > 0;
-    player?.classList.toggle("captionroll-full-sentence-captions", replaceNativeCaptions);
-    if (!state.videoCaptions) {
+    const replaceNativeCaptions = syncNativeCaptionReplacement();
+    if (!replaceNativeCaptions) {
       videoCaptionShadow.querySelector(".caption-shell").hidden = true;
       const popover = videoCaptionShadow.querySelector(".caption-settings-popover");
       popover.hidden = true;
@@ -913,8 +927,10 @@
   function updateVideoCaption(currentMs, activeIndex) {
     if (!videoCaptionHost?.isConnected) mountVideoCaption();
     const shell = videoCaptionShadow?.querySelector(".caption-shell");
-    if (!shell || !state.videoCaptions) {
+    const replaceNativeCaptions = syncNativeCaptionReplacement();
+    if (!shell || !replaceNativeCaptions) {
       if (shell) shell.hidden = true;
+      if (videoCaptionText) videoCaptionText.textContent = "";
       return;
     }
     const sentence = state.sentences[activeIndex];
