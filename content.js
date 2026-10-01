@@ -5,6 +5,7 @@
   const engine = globalThis.CaptionRollEngine;
   const cardEngine = globalThis.CaptionRollCards;
   const subtitleExport = globalThis.CaptionRollSubtitleExport;
+  const followPauseEngine = globalThis.CaptionRollFollowPause;
   const settingsEngine = globalThis.CaptionRollSettings;
   const initialVideoId =
     location.pathname === "/watch" ? new URLSearchParams(location.search).get("v") : null;
@@ -51,6 +52,10 @@
   let translatorSession = null;
   let translating = false;
   let interactionModeOverridden = false;
+  const followPauseController = followPauseEngine.createFollowPause({
+    delayMs: 5000,
+    onResume: resumeFollowAfterScroll
+  });
 
   const template = `
     <style>
@@ -463,7 +468,7 @@
     });
     followButton.addEventListener("click", () => setFollow(!state.follow, true, true));
     resumeButton.addEventListener("click", () => setFollow(true, true, true));
-    listElement.addEventListener("wheel", () => setFollow(false), { passive: true });
+    listElement.addEventListener("wheel", pauseFollowForScroll, { passive: true });
     listElement.addEventListener("touchstart", () => setFollow(false), { passive: true });
     listElement.addEventListener("pointerdown", (event) => {
       if (event.pointerType !== "mouse" || event.button === 0) setFollow(false);
@@ -525,9 +530,7 @@
     const collapseButton = shadow.querySelector(".collapse");
     collapseButton.textContent = state.collapsed ? "⌄" : "⌃";
     collapseButton.title = state.collapsed ? "展开文字稿" : "收起文字稿";
-    followButton?.classList.toggle("active", state.follow);
-    followButton?.setAttribute("aria-pressed", String(state.follow));
-    if (resumeButton) resumeButton.hidden = state.follow;
+    updateFollowPresentation();
     const selecting = state.interactionMode === "select";
     const interactionButton = shadow.querySelector(".interaction");
     interactionButton.textContent = selecting ? "选字模式" : "跳转模式";
@@ -897,12 +900,32 @@
   }
 
   function setFollow(value, scrollNow = false, persist = false) {
+    followPauseController.cancel();
     state.follow = Boolean(value);
-    followButton?.classList.toggle("active", state.follow);
-    followButton?.setAttribute("aria-pressed", String(state.follow));
-    if (resumeButton) resumeButton.hidden = state.follow;
+    updateFollowPresentation();
     if (state.follow && scrollNow) scrollToActive();
     if (persist) savePreferences();
+  }
+
+  function updateFollowPresentation() {
+    const paused = state.follow && followPauseController.isPaused();
+    followButton?.classList.toggle("active", state.follow);
+    followButton?.setAttribute("aria-pressed", String(state.follow));
+    if (followButton) {
+      followButton.title = paused ? "滚动暂停中，停止滚动 5 秒后继续跟随" : "自动跟随播放";
+    }
+    if (resumeButton) resumeButton.hidden = state.follow;
+  }
+
+  function pauseFollowForScroll() {
+    if (!state.follow) return;
+    followPauseController.pause();
+    updateFollowPresentation();
+  }
+
+  function resumeFollowAfterScroll() {
+    updateFollowPresentation();
+    if (state.follow && state.view === "transcript" && !state.collapsed) scrollToActive();
   }
 
   function seekToItem(index) {
@@ -1034,7 +1057,7 @@
     state.activeIndex = nextIndex;
     if (nextIndex >= 0) {
       listElement?.querySelector(`.cue[data-index="${nextIndex}"]`)?.classList.add("current");
-      if (state.follow && !state.collapsed) scrollToActive();
+      if (state.follow && !followPauseController.isPaused() && !state.collapsed) scrollToActive();
     }
   }
 
@@ -1050,6 +1073,7 @@
     if (!message || typeof message.type !== "string" || !message.type.startsWith(MESSAGE_PREFIX)) return;
 
     if (message.type === `${MESSAGE_PREFIX}NAV`) {
+      followPauseController.cancel();
       state.videoId = message.videoId ?? null;
       state.rawCues = [];
       state.sentences = [];
@@ -1057,6 +1081,7 @@
       state.statusCode = "loading";
       state.statusMessage = state.videoId ? "正在查找英文字幕…" : "请打开一个 YouTube 视频";
       state.trackLabel = "";
+      updateFollowPresentation();
       renderList();
       applyVideoCaptionPreferences();
       updateVideoCaption(0, -1);

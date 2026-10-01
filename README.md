@@ -13,7 +13,7 @@ CaptionRoll 是一个适用于 Microsoft Edge 和 Google Chrome 的 YouTube 英�
 - 在视频画面内用 CaptionRoll 整句字幕替代逐词滚动字幕，并可随时关闭以恢复原生字幕。
 - 当前字幕自动高亮并居中跟随。
 - 可将当前视频经过智能整句处理的字幕导出为带时间轴的 TXT 或标准 SRT 文件。
-- 用户滚动后暂停跟随，点击“回到当前字幕”恢复。
+- 鼠标滚动时临时暂停跟随，停止滚动 5 秒后自动回到当前字幕；也可以通过跟随按钮手动关闭。
 - 点击任意字幕跳转到对应视频时间。
 - 在扩展设置弹窗中切换“跳转模式”和可复制文字的“选字模式”。
 - 在文字稿工具栏中快速切换交互模式，并用 `A− / A+` 即时调整字号。
@@ -69,6 +69,7 @@ CaptionRoll 是一个适用于 Microsoft Edge 和 Google Chrome 的 YouTube 英�
 node tests/sentence-engine.test.js
 node tests/card-engine.test.js
 node tests/subtitle-export.test.js
+node tests/follow-pause.test.js
 node tests/page-hook.test.js
 node tests/settings.test.js
 ```
