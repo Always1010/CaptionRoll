@@ -4,6 +4,7 @@
   const MESSAGE_PREFIX = "CAPTIONROLL/";
   const engine = globalThis.CaptionRollEngine;
   const cardEngine = globalThis.CaptionRollCards;
+  const subtitleExport = globalThis.CaptionRollSubtitleExport;
   const settingsEngine = globalThis.CaptionRollSettings;
   const initialVideoId =
     location.pathname === "/watch" ? new URLSearchParams(location.search).get("v") : null;
@@ -40,6 +41,8 @@
   let favoriteCountElement = null;
   let selectAllElement = null;
   let exportStatusElement = null;
+  let subtitleExportButton = null;
+  let subtitleExportMenu = null;
   let videoElement = null;
   let videoCaptionHost = null;
   let videoCaptionShadow = null;
@@ -77,6 +80,16 @@
       .icon-button { width: 34px; height: 34px; display:grid; place-items:center; padding:0; border:0; border-radius: 50%;
         color: inherit; background: transparent; cursor:pointer; }
       .icon-button:hover { background: var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
+      .icon-button:disabled { opacity:.45; cursor:default; }
+      .icon-button svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+      .subtitle-export { position:relative; }
+      .subtitle-export-menu { position:absolute; z-index:4; top:40px; right:0; min-width:112px; padding:6px;
+        border:1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.14)); border-radius:10px;
+        color:inherit; background:var(--yt-spec-base-background, #fff); box-shadow:0 8px 24px rgba(0,0,0,.18); }
+      .subtitle-export-menu[hidden] { display:none; }
+      .subtitle-export-menu button { width:100%; border:0; border-radius:7px; padding:8px 10px; color:inherit;
+        background:transparent; text-align:left; cursor:pointer; font-size:12px; }
+      .subtitle-export-menu button:hover, .subtitle-export-menu button:focus-visible { background:var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
       .favorites-toggle { width:auto; padding:0 10px; gap:5px; white-space:nowrap; font-size:12px; }
       .favorites-toggle.active { color:var(--cr-accent); background:var(--cr-accent-soft); }
       .toolbar { display:flex; align-items:center; gap:8px; padding: 9px 12px; border-bottom: 1px solid var(--yt-spec-10-percent-layer, rgba(0,0,0,.1)); }
@@ -139,6 +152,7 @@
       .primary-button:disabled, .secondary-button:disabled { opacity:.55; cursor:default; }
       @media (prefers-color-scheme: dark) {
         .panel { background: var(--yt-spec-base-background, #0f0f0f); color:var(--yt-spec-text-primary, #f1f1f1); }
+        .subtitle-export-menu { background:var(--yt-spec-base-background, #212121); }
         .favorite-chinese { color:#f1f1f1; background:#212121; border-color:rgba(255,255,255,.2); }
       }
       :host-context(html[dark]) .favorite-chinese { color:#f1f1f1; background:#212121; border-color:rgba(255,255,255,.2); }
@@ -148,6 +162,15 @@
         <div class="brand">
           <div class="brand-line"><span class="logo"></span><h2>CaptionRoll</h2></div>
           <div class="status">正在查找英文字幕…</div>
+        </div>
+        <div class="subtitle-export">
+          <button class="icon-button subtitle-export-trigger" type="button" title="导出字幕" aria-label="导出字幕" aria-haspopup="menu" aria-expanded="false" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
+          </button>
+          <div class="subtitle-export-menu" role="menu" aria-label="选择字幕格式" hidden>
+            <button type="button" role="menuitem" data-export-format="txt">导出 TXT</button>
+            <button type="button" role="menuitem" data-export-format="srt">导出 SRT</button>
+          </div>
         </div>
         <button class="icon-button favorites-toggle" type="button" title="打开收藏夹" aria-label="打开收藏夹">★ <span class="favorite-count">0</span></button>
         <button class="icon-button collapse" type="button" title="收起文字稿" aria-label="收起文字稿">⌃</button>
@@ -391,9 +414,24 @@
     favoriteCountElement = shadow.querySelector(".favorite-count");
     selectAllElement = shadow.querySelector(".select-all");
     exportStatusElement = shadow.querySelector(".export-status");
+    subtitleExportButton = shadow.querySelector(".subtitle-export-trigger");
+    subtitleExportMenu = shadow.querySelector(".subtitle-export-menu");
     const interactionButton = shadow.querySelector(".interaction");
     shadow.querySelector(".collapse").addEventListener("click", toggleCollapsed);
     shadow.querySelector(".favorites-toggle").addEventListener("click", toggleFavoritesView);
+    subtitleExportButton.addEventListener("click", toggleSubtitleExportMenu);
+    subtitleExportMenu.addEventListener("click", (event) => {
+      const option = event.target.closest("[data-export-format]");
+      if (option) exportSubtitles(option.dataset.exportFormat);
+    });
+    shadow.addEventListener("click", (event) => {
+      if (!event.target.closest(".subtitle-export")) closeSubtitleExportMenu();
+    });
+    shadow.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || subtitleExportMenu.hidden) return;
+      closeSubtitleExportMenu();
+      subtitleExportButton.focus();
+    });
     interactionButton.addEventListener("click", toggleInteractionMode);
     shadow.querySelectorAll("[data-font]").forEach((button) => {
       button.addEventListener("click", () => changeFont(button.dataset.font === "up" ? 0.1 : -0.1));
@@ -595,6 +633,38 @@
   function currentVideoTitle() {
     const heading = document.querySelector("ytd-watch-metadata h1, #info-contents h1");
     return heading?.textContent?.trim() || document.title.replace(/\s+-\s+YouTube\s*$/, "").trim();
+  }
+
+  function closeSubtitleExportMenu() {
+    if (!subtitleExportMenu || !subtitleExportButton) return;
+    subtitleExportMenu.hidden = true;
+    subtitleExportButton.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleSubtitleExportMenu() {
+    if (!state.sentences.length) return;
+    const opening = subtitleExportMenu.hidden;
+    subtitleExportMenu.hidden = !opening;
+    subtitleExportButton.setAttribute("aria-expanded", String(opening));
+    if (opening) subtitleExportMenu.querySelector("[role=menuitem]")?.focus();
+  }
+
+  function exportSubtitles(format) {
+    const normalizedFormat = format === "srt" ? "srt" : "txt";
+    const text = normalizedFormat === "srt"
+      ? subtitleExport.buildSrt(state.sentences)
+      : subtitleExport.buildTxt(state.sentences);
+    closeSubtitleExportMenu();
+    if (!text) return;
+
+    const filename = `${subtitleExport.safeFilename(currentVideoTitle())}.${normalizedFormat}`;
+    const mimeType = normalizedFormat === "srt" ? "application/x-subrip" : "text/plain";
+    const url = URL.createObjectURL(new Blob(["\uFEFF", text], { type: `${mimeType};charset=utf-8` }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   function favoriteForItem(item) {
@@ -859,6 +929,8 @@
   function renderList() {
     if (!listElement) return;
     const items = currentItems();
+    subtitleExportButton.disabled = items.length === 0;
+    if (!items.length) closeSubtitleExportMenu();
     listElement.replaceChildren();
     if (!items.length) {
       const empty = document.createElement("div");

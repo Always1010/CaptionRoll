@@ -35,7 +35,7 @@
     {
       "matches": ["https://www.youtube.com/*"],
       "css": ["content.css"],
-      "js": ["sentence-engine.js", "card-engine.js", "settings.js", "content.js"],
+      "js": ["sentence-engine.js", "card-engine.js", "subtitle-export.js", "settings.js", "content.js"],
       "run_at": "document_start"
     }
   ]
